@@ -1,0 +1,36 @@
+{
+  "name": "xiaochengxu",
+  "private": true,
+  "packageManager": "pnpm@10.10.0",
+  "scripts": {
+    "postinstall": "node scripts/sync-taro-links.mjs",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "build": "pnpm -r build"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@biomejs/biome",
+      "@parcel/watcher",
+      "@swc/core",
+      "@tarojs/binding",
+      "@tarojs/cli",
+      "better-sqlite3",
+      "esbuild",
+      "msgpackr-extract"
+    ]
+  },
+  "devDependencies": {
+    "@babel/preset-react": "^7.28.5",
+    "@biomejs/biome": "^1.9.4",
+    "@tarojs/cli": "^4.2.0",
+    "@testing-library/react": "^16.2.0",
+    "@types/node": "^24.0.0",
+    "babel-preset-taro": "^4.2.0",
+    "jsdom": "^26.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.3"
+  }
+}

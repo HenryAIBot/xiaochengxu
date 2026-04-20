@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "asin": "B0C1234567",
+      "title": "Nike style running shoes"
+    },
+    {
+      "asin": "B0C7654321",
+      "title": "Nike training shorts"
+    }
+  ]
+}

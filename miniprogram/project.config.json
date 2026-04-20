@@ -1,0 +1,11 @@
+{
+  "appid": "touristappid",
+  "projectname": "xiaochengxu",
+  "miniprogramRoot": "dist/",
+  "setting": {
+    "es6": true,
+    "postcss": true,
+    "minified": false
+  },
+  "compileType": "miniprogram"
+}
