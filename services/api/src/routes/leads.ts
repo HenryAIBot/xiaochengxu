@@ -19,7 +19,11 @@ export async function registerLeadRoutes(app: FastifyInstance) {
 
     app.db
       .prepare(
-        "INSERT INTO leads (id, email, phone, created_at) VALUES (@id, @email, @phone, @createdAt)",
+        `INSERT INTO leads (
+          id, email, phone, source_report_id, source_task_id, source_tool, source_input, created_at
+        ) VALUES (
+          @id, @email, @phone, null, null, null, null, @createdAt
+        )`,
       )
       .run(lead);
 

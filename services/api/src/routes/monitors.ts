@@ -9,6 +9,23 @@ interface CreateMonitorBody {
 }
 
 export async function registerMonitorRoutes(app: FastifyInstance) {
+  app.get("/api/monitors", async () => {
+    const items = app.db
+      .prepare(
+        `SELECT id,
+                target_kind AS targetKind,
+                target_value AS targetValue,
+                notify_email AS notifyEmail,
+                notify_phone AS notifyPhone,
+                status
+         FROM monitors
+         ORDER BY rowid DESC`,
+      )
+      .all();
+
+    return { items };
+  });
+
   app.post("/api/monitors", async (request, reply) => {
     const body = request.body as CreateMonitorBody;
     const monitor = {

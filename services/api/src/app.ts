@@ -22,6 +22,15 @@ export function buildApp({ db: providedDb }: { db?: QueryTaskDatabase } = {}) {
   const ownsDb = !providedDb;
   const app = Fastify();
 
+  app.addHook("onRequest", async (request, reply) => {
+    reply.header("Access-Control-Allow-Origin", "*");
+    reply.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    reply.header("Access-Control-Allow-Headers", "Content-Type");
+    if (request.method === "OPTIONS") {
+      reply.code(204).send("");
+    }
+  });
+
   app.decorate("db", db);
   app.get("/health", async () => ({ ok: true }));
   app.register(registerQueryTaskRoutes);

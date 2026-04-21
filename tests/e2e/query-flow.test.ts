@@ -27,17 +27,38 @@ describe("query flow", () => {
       },
     });
 
-    expect(query.statusCode).toBe(202);
+    expect(query.statusCode).toBe(200);
+    expect(query.json()).toMatchObject({
+      status: "completed",
+      level: "suspected_high",
+    });
 
     const unlock = await app.inject({
       method: "POST",
-      url: "/api/reports/report-1/unlock",
+      url: `/api/reports/${query.json().reportId}/unlock`,
       payload: {
         email: "seller@example.com",
       },
     });
 
     expect(unlock.statusCode).toBe(200);
+
+    const fullReport = await app.inject({
+      method: "GET",
+      url: unlock.json().fullReportUrl,
+    });
+
+    expect(fullReport.statusCode).toBe(200);
+    expect(fullReport.json()).toMatchObject({
+      unlocked: true,
+      query: {
+        tool: "tro_alert",
+        normalizedInput: "nike",
+      },
+      preview: {
+        level: "suspected_high",
+      },
+    });
 
     const monitor = await app.inject({
       method: "POST",

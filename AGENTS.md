@@ -54,6 +54,9 @@
 - 先定义规则，再写实现；需要改规范时，先改本文档再改代码
 - 不为了让流程跑通而弱化报错或隐藏失败状态
 - 不把密钥、token、密码写入仓库
+- 每完成一个开发任务，必须同步更新任务状态文档：`docs/superpowers/specs/2026-04-21-project-status.md`
+- 如果任务来自某个实施计划，必须同步更新对应 `docs/superpowers/plans/*-plan.md` 的复选框或状态说明
+- 任务状态必须区分 `done`、`partial`、`todo`、`blocked`；mock、硬编码、占位实现不能标记为 `done`
 
 ## 验证约定
 

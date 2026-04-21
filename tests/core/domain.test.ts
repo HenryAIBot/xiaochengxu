@@ -70,9 +70,7 @@ describe("core domain", () => {
     const summary = summarizeRisk("infringement_check", signals);
     expect(summary.level).toBe("suspected_high");
     expect(summary.headline).toBe("registered mark overlaps listing brand");
-    expect(summary.recommendedActions).toContain(
-      "立即复核 Listing 品牌词与图片",
-    );
+    expect(summary.recommendedActions).toContain("立即复核商品页品牌词与图片");
   });
 
   it("uses empty-signal defaults for summarizeRisk and buildPreview", () => {
@@ -122,9 +120,7 @@ describe("core domain", () => {
 
     expect(preview.level).toBe("suspected_high");
     expect(preview.summary).toBe("registered mark overlaps listing brand");
-    expect(preview.recommendedActions).toContain(
-      "立即复核 Listing 品牌词与图片",
-    );
+    expect(preview.recommendedActions).toContain("立即复核商品页品牌词与图片");
     expect(preview.evidence).toHaveLength(3);
     expect(preview.evidence[0]?.reason).toBe(
       "registered mark overlaps listing brand",

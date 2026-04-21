@@ -6,8 +6,8 @@ export async function registerStorefrontRoutes(app: FastifyInstance) {
 
     return {
       items: [
-        { asin: "B0C1234567", title: `${storeName} candidate 1` },
-        { asin: "B0C7654321", title: `${storeName} candidate 2` },
+        { asin: "B0C1234567", title: `${storeName} 代表商品 1` },
+        { asin: "B0C7654321", title: `${storeName} 代表商品 2` },
       ],
     };
   });

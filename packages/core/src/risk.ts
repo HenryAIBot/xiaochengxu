@@ -17,8 +17,8 @@ const LEVEL_ORDER: RiskLevel[] = [
 const ACTIONS: Record<RiskLevel, string[]> = {
   clear: ["继续观察"],
   watch: ["加入持续监控", "关注新案与品牌词变化"],
-  suspected_high: ["立即复核 Listing 品牌词与图片", "准备联系顾问"],
-  confirmed: ["立即处理高风险 Listing", "联系顾问并准备申诉/和解材料"],
+  suspected_high: ["立即复核商品页品牌词与图片", "准备联系顾问"],
+  confirmed: ["立即处理高风险商品页", "联系顾问并准备申诉/和解材料"],
 };
 
 export function compareRiskLevelSeverity(

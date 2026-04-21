@@ -13,6 +13,21 @@ export function resolveDefaultQueryTaskDatabasePath() {
 
 const DEFAULT_DB_PATH = resolveDefaultQueryTaskDatabasePath();
 
+function ensureColumn(
+  db: QueryTaskDatabase,
+  tableName: string,
+  columnName: string,
+  definition: string,
+) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+    name: string;
+  }>;
+
+  if (!columns.some((column) => column.name === columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
 function initializeSchema(db: QueryTaskDatabase) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS query_tasks (
@@ -30,6 +45,9 @@ function initializeSchema(db: QueryTaskDatabase) {
       task_id TEXT NOT NULL,
       level TEXT NOT NULL,
       summary TEXT NOT NULL,
+      evidence_json TEXT NOT NULL DEFAULT '[]',
+      recommended_actions_json TEXT NOT NULL DEFAULT '[]',
+      extra_json TEXT,
       unlocked INTEGER NOT NULL DEFAULT 0
     );
 
@@ -37,6 +55,10 @@ function initializeSchema(db: QueryTaskDatabase) {
       id TEXT PRIMARY KEY,
       email TEXT,
       phone TEXT,
+      source_report_id TEXT,
+      source_task_id TEXT,
+      source_tool TEXT,
+      source_input TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -56,6 +78,19 @@ function initializeSchema(db: QueryTaskDatabase) {
       created_at TEXT NOT NULL
     );
   `);
+
+  ensureColumn(db, "reports", "evidence_json", "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(
+    db,
+    "reports",
+    "recommended_actions_json",
+    "TEXT NOT NULL DEFAULT '[]'",
+  );
+  ensureColumn(db, "reports", "extra_json", "TEXT");
+  ensureColumn(db, "leads", "source_report_id", "TEXT");
+  ensureColumn(db, "leads", "source_task_id", "TEXT");
+  ensureColumn(db, "leads", "source_tool", "TEXT");
+  ensureColumn(db, "leads", "source_input", "TEXT");
 }
 
 export function createQueryTaskDatabase(filePath = DEFAULT_DB_PATH) {

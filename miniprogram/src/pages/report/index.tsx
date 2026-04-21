@@ -1,12 +1,21 @@
 import { View } from "@tarojs/components";
+import Taro from "@tarojs/taro";
 import { ReportUnlockScreen } from "../../components/report-unlock-screen";
-import { unlockReport } from "../../lib/api";
+import { getReport, unlockReport } from "../../lib/api";
 
 export default function ReportPage() {
+  const reportId =
+    Taro.getCurrentInstance().router?.params?.id ??
+    Taro.getStorageSync("latestReportId") ??
+    "report-1";
+
   return (
     <View>
       <ReportUnlockScreen
-        onUnlock={(payload) => unlockReport("report-1", payload)}
+        onUnlock={async (payload) => {
+          await unlockReport(reportId, payload);
+          return getReport(reportId);
+        }}
       />
     </View>
   );

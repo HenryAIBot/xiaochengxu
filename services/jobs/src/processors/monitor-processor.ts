@@ -18,6 +18,13 @@ interface MonitorProcessorPorts {
   saveMessage: (input: { channel: string; body: string }) => Promise<unknown>;
 }
 
+const LEVEL_LABELS: Record<PreviewLevel, string> = {
+  clear: "未发现明显风险",
+  watch: "需关注",
+  suspected_high: "疑似高风险",
+  confirmed: "已确认风险",
+};
+
 export async function runMonitorProcessor(
   job: MonitorJob,
   ports: MonitorProcessorPorts,
@@ -28,13 +35,13 @@ export async function runMonitorProcessor(
 
   await ports.sendEmail({
     to: "ops@example.com",
-    subject: `Monitor ${job.monitorId} hit ${job.preview.level}`,
+    subject: `监控 ${job.monitorId} 命中${LEVEL_LABELS[job.preview.level]}`,
     html: `<p>${job.preview.summary}</p>`,
   });
 
   await ports.sendSms({
     to: "+15551234567",
-    body: `${job.preview.level}: ${job.preview.summary}`,
+    body: `${LEVEL_LABELS[job.preview.level]}：${job.preview.summary}`,
   });
 
   await ports.saveMessage({

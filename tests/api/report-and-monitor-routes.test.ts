@@ -15,12 +15,22 @@ describe("report unlock and monitor routes", () => {
     db = createInMemoryDb();
   });
 
-  it("unlocks a report, creates a monitor, and lists storefront candidates", async () => {
+  it("unlocks an existing report, creates a monitor, and lists storefront candidates", async () => {
     app = buildApp({ db });
+
+    const query = await app.inject({
+      method: "POST",
+      url: "/api/query-tasks",
+      payload: {
+        tool: "tro_alert",
+        input: "nike",
+      },
+    });
+    const reportId = query.json().reportId as string;
 
     const unlock = await app.inject({
       method: "POST",
-      url: "/api/reports/report-1/unlock",
+      url: `/api/reports/${reportId}/unlock`,
       payload: {
         email: "seller@example.com",
         phone: "+15551234567",
@@ -29,9 +39,29 @@ describe("report unlock and monitor routes", () => {
 
     expect(unlock.statusCode).toBe(200);
     expect(unlock.json()).toMatchObject({
-      id: "report-1",
+      id: reportId,
       unlocked: true,
-      fullReportUrl: "/api/reports/report-1",
+      fullReportUrl: `/api/reports/${reportId}`,
+    });
+
+    const fullReport = await app.inject({
+      method: "GET",
+      url: `/api/reports/${reportId}`,
+    });
+
+    expect(fullReport.statusCode).toBe(200);
+    expect(fullReport.json()).toMatchObject({
+      id: reportId,
+      unlocked: true,
+      preview: {
+        level: "suspected_high",
+        summary: expect.stringContaining("Nike"),
+      },
+      query: {
+        tool: "tro_alert",
+        inputKind: "brand",
+        normalizedInput: "nike",
+      },
     });
 
     const monitor = await app.inject({
@@ -45,6 +75,7 @@ describe("report unlock and monitor routes", () => {
     });
 
     expect(monitor.statusCode).toBe(201);
+    const monitorId = monitor.json().id as string;
     expect(monitor.json()).toMatchObject({
       status: "active",
       targetKind: "brand",
@@ -52,15 +83,51 @@ describe("report unlock and monitor routes", () => {
       notifyEmail: "seller@example.com",
     });
 
+    const monitors = await app.inject({
+      method: "GET",
+      url: "/api/monitors",
+    });
+
+    expect(monitors.statusCode).toBe(200);
+    expect(monitors.json()).toMatchObject({
+      items: [
+        {
+          id: monitorId,
+          status: "active",
+          targetKind: "brand",
+          targetValue: "nike",
+          notifyEmail: "seller@example.com",
+        },
+      ],
+    });
+
     const leadRecord = db
       .prepare(
-        "SELECT email, phone FROM leads ORDER BY created_at DESC LIMIT 1",
+        `SELECT email, phone, source_report_id AS sourceReportId, source_task_id AS sourceTaskId,
+                source_tool AS sourceTool, source_input AS sourceInput
+         FROM leads ORDER BY created_at DESC LIMIT 1`,
       )
-      .get() as { email: string | null; phone: string | null };
+      .get() as {
+      email: string | null;
+      phone: string | null;
+      sourceReportId: string | null;
+      sourceTaskId: string | null;
+      sourceTool: string | null;
+      sourceInput: string | null;
+    };
     expect(leadRecord).toMatchObject({
       email: "seller@example.com",
       phone: "+15551234567",
+      sourceReportId: reportId,
+      sourceTaskId: query.json().id,
+      sourceTool: "tro_alert",
+      sourceInput: "nike",
     });
+
+    const reportRecord = db
+      .prepare("SELECT unlocked FROM reports WHERE id = ?")
+      .get(reportId) as { unlocked: number };
+    expect(reportRecord.unlocked).toBe(1);
 
     const monitorRecord = db
       .prepare(
@@ -88,6 +155,31 @@ describe("report unlock and monitor routes", () => {
     expect(storefront.statusCode).toBe(200);
     expect(storefront.json()).toMatchObject({
       items: [{ asin: "B0C1234567" }, { asin: "B0C7654321" }],
+    });
+  });
+
+  it("rejects report unlock without contact information", async () => {
+    app = buildApp({ db });
+
+    const query = await app.inject({
+      method: "POST",
+      url: "/api/query-tasks",
+      payload: {
+        tool: "tro_alert",
+        input: "nike",
+      },
+    });
+
+    const unlock = await app.inject({
+      method: "POST",
+      url: `/api/reports/${query.json().reportId}/unlock`,
+      payload: {},
+    });
+
+    expect(unlock.statusCode).toBe(400);
+    expect(unlock.json()).toMatchObject({
+      code: "CONTACT_REQUIRED",
+      message: "请输入邮箱或手机号",
     });
   });
 });

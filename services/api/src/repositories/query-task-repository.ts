@@ -39,4 +39,10 @@ export class QueryTaskRepository {
 
     return record;
   }
+
+  updateStatus(id: string, status: string) {
+    this.db
+      .prepare("UPDATE query_tasks SET status = ? WHERE id = ?")
+      .run(status, id);
+  }
 }

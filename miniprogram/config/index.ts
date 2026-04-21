@@ -9,10 +9,19 @@ export default defineConfig({
   compiler: "webpack5",
   mini: {
     webpackChain(chain) {
-      // Taro 4 under pnpm can emit a null alias for this package, but webpack 5.91
-      // only accepts false/string here.
       chain.resolve.alias.set("@tarojs/shared", false);
     },
+    postcss: {
+      pxtransform: {
+        enable: true,
+      },
+    },
+  },
+  h5: {
+    devServer: {
+      port: 10086,
+    },
+    publicPath: "/",
     postcss: {
       pxtransform: {
         enable: true,

@@ -21,7 +21,7 @@ describe("tool services", () => {
     const result = await service.run("nike");
 
     expect(result.preview.level).toBe("suspected_high");
-    expect(result.preview.summary).toContain("temporary restraining order");
+    expect(result.preview.summary).toContain("发现相关临时限制令案件");
   });
 
   it("builds a case timeline from docket entries", async () => {
@@ -38,7 +38,7 @@ describe("tool services", () => {
 
     const result = await service.run("1:25-cv-01234");
 
-    expect(result.timeline[0]?.event).toContain("Temporary restraining order");
+    expect(result.timeline[0]?.event).toContain("法院已签发临时限制令");
     expect(result.preview.level).toBe("watch");
   });
 
@@ -54,6 +54,36 @@ describe("tool services", () => {
 
     expect(result.preview.level).toBe("suspected_high");
     expect(result.listing.brand).toBe("nike");
+  });
+
+  it("checks a brand term against USPTO directly instead of treating it as an ASIN", async () => {
+    const service = new InfringementCheckService({
+      getListingHtml: async () => {
+        throw new Error("brand inputs should not fetch Amazon listing HTML");
+      },
+      searchMarks: async (term) => ({
+        marks:
+          term === "apple"
+            ? [
+                { owner: "Apple Inc.", mark: "APPLE", status: "LIVE" },
+                { owner: "Apple Inc.", mark: "IPHONE", status: "LIVE" },
+                { owner: "Apple Inc.", mark: "AIRPODS", status: "LIVE" },
+              ]
+            : [],
+      }),
+    });
+
+    const result = await service.run("apple", "brand");
+
+    expect(result.preview.level).toBe("suspected_high");
+    expect(result.preview.summary).toContain(
+      "权利人 Apple Inc. 名下有效商标：APPLE、IPHONE、AIRPODS",
+    );
+    expect(result.preview.evidence).toHaveLength(1);
+    expect(result.listing).toMatchObject({
+      brand: "apple",
+      inputKind: "brand",
+    });
   });
 
   it("returns representative products for a storefront search", async () => {

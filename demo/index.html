@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TRO 风险预警 - Amazon 卖家侵权检测</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+
+  /* Header */
+  .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); color: white; padding: 20px 16px; text-align: center; position: sticky; top: 0; z-index: 100; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header p { font-size: 12px; opacity: 0.8; margin-top: 4px; }
+
+  /* Tab Bar */
+  .tab-bar { display: flex; background: white; border-bottom: 1px solid #e0e0e0; position: sticky; top: 68px; z-index: 99; }
+  .tab-bar button { flex: 1; padding: 12px 0; border: none; background: none; font-size: 14px; color: #666; cursor: pointer; transition: all 0.2s; position: relative; }
+  .tab-bar button.active { color: #0f3460; font-weight: 600; }
+  .tab-bar button.active::after { content: ''; position: absolute; bottom: 0; left: 25%; right: 25%; height: 3px; background: #e94560; border-radius: 2px; }
+
+  /* Pages */
+  .page { display: none; padding: 16px; max-width: 480px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* Home */
+  .search-box { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 16px; }
+  .search-box h2 { font-size: 16px; margin-bottom: 12px; }
+  .search-input { width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.2s; }
+  .search-input:focus { border-color: #0f3460; }
+  .tool-selector { display: flex; gap: 8px; margin: 12px 0; }
+  .tool-btn { flex: 1; padding: 10px 8px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; font-size: 13px; cursor: pointer; transition: all 0.2s; text-align: center; }
+  .tool-btn.active { border-color: #0f3460; background: #f0f4ff; color: #0f3460; font-weight: 600; }
+  .submit-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #e94560, #c23152); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+  .submit-btn:hover { opacity: 0.9; }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Quick Stats */
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .stat-card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-align: center; }
+  .stat-card .number { font-size: 28px; font-weight: 700; color: #0f3460; }
+  .stat-card .label { font-size: 12px; color: #999; margin-top: 4px; }
+
+  /* Result */
+  .result-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 12px; }
+  .risk-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+  .risk-badge.high { background: #ffe0e3; color: #e94560; }
+  .risk-badge.watch { background: #fff3e0; color: #f57c00; }
+  .risk-badge.clear { background: #e8f5e9; color: #4caf50; }
+  .risk-badge.confirmed { background: #ffebee; color: #c62828; }
+  .result-card h3 { font-size: 16px; margin-bottom: 8px; }
+  .result-card p { font-size: 14px; color: #666; line-height: 1.5; }
+  .action-list { list-style: none; margin-top: 12px; }
+  .action-list li { padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .action-list li::before { content: '>'; color: #e94560; font-weight: bold; }
+  .action-list li:last-child { border-bottom: none; }
+  .report-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+  .report-meta div { background: #f7f8fa; border-radius: 8px; padding: 10px; font-size: 12px; color: #666; }
+  .report-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid #f0f0f0; }
+  .report-section h4 { font-size: 14px; margin-bottom: 8px; color: #333; }
+  .evidence-item { padding: 10px; border-left: 3px solid #e94560; background: #fff8f9; border-radius: 6px; margin-bottom: 8px; font-size: 13px; color: #555; line-height: 1.45; }
+  .empty-state { background: white; border-radius: 12px; padding: 24px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-align: center; }
+  .empty-state p { color: #777; font-size: 14px; line-height: 1.5; margin-top: 8px; }
+
+  /* Monitor */
+  .monitor-item { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .monitor-info h4 { font-size: 15px; }
+  .monitor-info p { font-size: 12px; color: #999; margin-top: 4px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .status-dot.active { background: #4caf50; box-shadow: 0 0 6px rgba(76,175,80,0.5); }
+
+  /* Messages */
+  .msg-item { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 12px; }
+  .msg-item h4 { font-size: 14px; margin-bottom: 6px; }
+  .msg-item p { font-size: 13px; color: #666; }
+  .msg-item .time { font-size: 12px; color: #bbb; margin-top: 8px; }
+
+  /* Unlock Modal */
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 200; justify-content: center; align-items: center; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: white; border-radius: 16px; padding: 24px; width: 90%; max-width: 400px; }
+  .modal h3 { font-size: 18px; margin-bottom: 16px; text-align: center; }
+  .modal input { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; margin-bottom: 12px; font-size: 14px; }
+  .modal .unlock-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #0f3460, #16213e); color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 40px; color: #999; }
+  .spinner { width: 40px; height: 40px; border: 3px solid #e0e0e0; border-top-color: #0f3460; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 20px; font-size: 14px; z-index: 300; display: none; }
+  .toast.show { display: block; animation: fadeInOut 2s ease; }
+  @keyframes fadeInOut { 0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>TRO 风险预警</h1>
+  <p>Amazon 美国站卖家侵权风险检测工具</p>
+</div>
+
+<div class="tab-bar">
+  <button class="active" onclick="switchTab('home')">首页</button>
+  <button onclick="switchTab('monitor')">监控</button>
+  <button onclick="switchTab('report')">报告</button>
+  <button onclick="switchTab('messages')">消息</button>
+</div>
+
+<div id="page-home" class="page active">
+  <div class="search-box">
+    <h2>快速风险检测</h2>
+    <input class="search-input" id="searchInput" placeholder="品牌词 / 店铺名 / ASIN / 案件号" />
+    <div class="tool-selector">
+      <button class="tool-btn active" data-tool="infringement_check" onclick="selectTool(this)">侵权体检</button>
+      <button class="tool-btn" data-tool="tro_alert" onclick="selectTool(this)">TRO预警</button>
+      <button class="tool-btn" data-tool="case_progress" onclick="selectTool(this)">案件进展</button>
+    </div>
+    <button class="submit-btn" onclick="runCheck()">立即检测</button>
+  </div>
+
+  <div id="resultArea"></div>
+
+  <div class="stats">
+    <div class="stat-card"><div class="number">3</div><div class="label">活跃监控</div></div>
+    <div class="stat-card"><div class="number">12</div><div class="label">本周检测</div></div>
+    <div class="stat-card"><div class="number">2</div><div class="label">风险预警</div></div>
+    <div class="stat-card"><div class="number">0</div><div class="label">已确认TRO</div></div>
+  </div>
+</div>
+
+<div id="page-monitor" class="page">
+  <h2 style="margin-bottom:16px;font-size:18px;">监控列表</h2>
+  <div class="monitor-item"><div class="monitor-info"><h4>Nike</h4><p>品牌监控 - TRO预警</p></div><div class="status-dot active"></div></div>
+  <div class="monitor-item"><div class="monitor-info"><h4>Adidas</h4><p>品牌监控 - 侵权体检</p></div><div class="status-dot active"></div></div>
+  <div class="monitor-item"><div class="monitor-info"><h4>NBA Store</h4><p>店铺监控 - TRO预警</p></div><div class="status-dot active"></div></div>
+  <button class="submit-btn" style="margin-top:16px;" onclick="showToast('新监控已创建！')">+ 新建监控</button>
+</div>
+
+<div id="page-report" class="page">
+  <h2 style="margin-bottom:16px;font-size:18px;">检测报告</h2>
+  <div class="result-card" id="reportPreview">
+    <span class="risk-badge high">疑似高风险</span>
+    <h3>Nike 品牌侵权检测报告</h3>
+    <p>检测到 3 个注册商标命中，以及 2 个提及该监控品牌的新法院起诉。</p>
+    <ul class="action-list">
+      <li>立即复核 Listing 品牌词与图片</li>
+      <li>准备联系法律顾问</li>
+    </ul>
+    <button class="submit-btn" style="margin-top:12px;" onclick="showUnlockModal()">解锁完整报告</button>
+  </div>
+  <div id="fullReportArea">
+    <div class="empty-state">
+      <h3>完整报告待解锁</h3>
+      <p>先在首页完成一次检测，再点击报告中的「解锁完整报告」。解锁后这里会展示完整证据、建议动作和查询来源。</p>
+    </div>
+  </div>
+</div>
+
+<div id="page-messages" class="page">
+  <h2 style="margin-bottom:16px;font-size:18px;">消息通知</h2>
+  <div class="msg-item"><h4>TRO预警：检测到新案件</h4><p>新案件 "ABC Brand LLC v. Amazon Sellers" 提及您监控的品牌 "Nike"。</p><div class="time">10 分钟前</div></div>
+  <div class="msg-item"><h4>监控动态：本周摘要</h4><p>您的 3 个活跃监控本周发现 2 个新信号，暂无已确认 TRO。</p><div class="time">2 小时前</div></div>
+  <div class="msg-item"><h4>侵权体检完成</h4><p>ASIN B0C1234567 检测完成，风险等级：疑似高风险。</p><div class="time">昨天</div></div>
+</div>
+
+<div class="modal-overlay" id="unlockModal">
+  <div class="modal">
+    <h3>解锁完整报告</h3>
+    <input id="unlockEmail" placeholder="邮箱地址" value="seller@example.com" />
+    <input id="unlockPhone" placeholder="手机号（选填）" />
+    <button class="unlock-btn" onclick="unlockReport()">立即解锁</button>
+    <p style="text-align:center;margin-top:12px;font-size:12px;color:#999;">联系方式仅用于报告推送</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'http://127.0.0.1:3000';
+let currentTool = 'infringement_check';
+let latestReportId = null;
+let latestReportUrl = null;
+let latestQueryResult = null;
+
+function switchTab(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const tabButton = (typeof event !== 'undefined' ? event.target : null) || document.querySelector(`.tab-bar button[onclick="switchTab('${name}')"]`);
+  if (tabButton) tabButton.classList.add('active');
+}
+
+function selectTool(btn) {
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTool = btn.dataset.tool;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function riskBadgeClass(level) {
+  const badgeMap = { clear: 'clear', watch: 'watch', suspected_high: 'high', confirmed: 'confirmed' };
+  return badgeMap[level] || 'watch';
+}
+
+function riskLabel(level) {
+  const labelMap = { clear: '安全', watch: '需关注', suspected_high: '疑似高风险', confirmed: '已确认' };
+  return labelMap[level] || level || '未知';
+}
+
+function renderReportPreview(data) {
+  const reportPreview = document.getElementById('reportPreview');
+  const value = data.normalizedInput?.normalizedValue || data.query?.normalizedInput || '最近一次检测';
+  reportPreview.innerHTML = `
+    <span class="risk-badge ${riskBadgeClass(data.level)}">${escapeHtml(data.levelLabel || riskLabel(data.level))}</span>
+    <h3>${escapeHtml(value)} 检测报告</h3>
+    <p>${escapeHtml(data.summary || '暂未发现明显风险')}</p>
+    <ul class="action-list">
+      ${(data.recommendedActions || []).map(a => '<li>' + escapeHtml(a) + '</li>').join('')}
+    </ul>
+    <button class="submit-btn" style="margin-top:12px;" onclick="showUnlockModal()">解锁完整报告</button>
+  `;
+}
+
+function renderFullReport(report) {
+  const area = document.getElementById('fullReportArea');
+  const evidence = report.preview?.evidence || [];
+  const actions = report.preview?.recommendedActions || [];
+  const extra = report.preview?.extra;
+  const timeline = extra?.timeline || [];
+
+  const evidenceHtml = evidence.length
+    ? evidence.map(item => `<div class="evidence-item">${escapeHtml(item.reason || item.title || JSON.stringify(item))}</div>`).join('')
+    : '<p>暂未发现可展示的关键证据。</p>';
+
+  const actionsHtml = actions.length
+    ? `<ul class="action-list">${actions.map(action => '<li>' + escapeHtml(action) + '</li>').join('')}</ul>`
+    : '<p>暂无进一步动作建议。</p>';
+
+  const timelineHtml = timeline.length
+    ? `<div class="report-section"><h4>案件时间线</h4>${timeline.map(item => `<div class="evidence-item"><strong>${escapeHtml(item.at)}</strong> ${escapeHtml(item.event)}</div>`).join('')}</div>`
+    : '';
+
+  const listingHtml = extra?.brand
+    ? `<div class="report-section"><h4>Listing 信息</h4><p>品牌：${escapeHtml(extra.brand)}</p><p>ASIN：${escapeHtml(extra.asin)}</p></div>`
+    : '';
+
+  area.innerHTML = `
+    <div class="result-card">
+      <span class="risk-badge ${riskBadgeClass(report.preview?.level)}">${riskLabel(report.preview?.level)}</span>
+      <h3>完整报告已解锁</h3>
+      <p>${escapeHtml(report.preview?.summary || '暂无报告摘要')}</p>
+      <div class="report-meta">
+        <div>工具：${escapeHtml(report.query?.tool)}</div>
+        <div>输入：${escapeHtml(report.query?.normalizedInput)}</div>
+        <div>类型：${escapeHtml(report.query?.inputKind)}</div>
+        <div>任务：${escapeHtml(report.query?.taskId?.slice(0, 8))}...</div>
+      </div>
+      <div class="report-section">
+        <h4>完整证据</h4>
+        ${evidenceHtml}
+      </div>
+      ${listingHtml}
+      ${timelineHtml}
+      <div class="report-section">
+        <h4>处理清单</h4>
+        ${actionsHtml}
+      </div>
+    </div>
+  `;
+}
+
+async function runCheck() {
+  const input = document.getElementById('searchInput').value.trim();
+  if (!input) { showToast('请输入品牌词、ASIN 或案件号'); return; }
+
+  const area = document.getElementById('resultArea');
+  area.innerHTML = '<div class="loading"><div class="spinner"></div>正在分析风险...</div>';
+
+  try {
+    const res = await fetch(API + '/api/query-tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool: currentTool, input })
+    });
+    const data = await res.json();
+
+    if (data.code === 'INVALID_REQUEST') {
+      area.innerHTML = '<div class="result-card"><p style="color:#e94560;">请求参数错误</p></div>';
+      return;
+    }
+
+    latestReportId = data.reportId;
+    latestReportUrl = data.reportId ? `/api/reports/${data.reportId}` : null;
+    latestQueryResult = data;
+    renderReportPreview(data);
+
+    const badgeClass = riskBadgeClass(data.level);
+    const inputTypeMap = { asin: 'ASIN', brand: '品牌', store_name: '店铺', case_number: '案件号' };
+    const inputType = inputTypeMap[data.normalizedInput?.kind] || '未知';
+
+    const toolNameMap = { infringement_check: '侵权体检', tro_alert: 'TRO预警', case_progress: '案件进展' };
+    const toolLabel = toolNameMap[currentTool] || '检测';
+
+    let evidenceHtml = '';
+    if (data.evidence && data.evidence.length > 0) {
+      evidenceHtml = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;">'
+        + '<p style="font-size:13px;color:#999;margin-bottom:8px;">风险信号来源：</p>'
+        + data.evidence.map(e => `<p style="font-size:13px;color:#666;margin:4px 0;padding-left:8px;border-left:3px solid ${e.level === 'suspected_high' ? '#e94560' : '#f57c00'};">${e.reason}</p>`).join('')
+        + '</div>';
+    }
+
+    let extraHtml = '';
+    if (data.extra) {
+      if (data.extra.brand) {
+        extraHtml = `<p style="margin-top:8px;font-size:13px;color:#999;">检测到 Listing 品牌：<strong style="color:#333;">${data.extra.brand}</strong>（ASIN: ${data.extra.asin}）</p>`;
+      }
+      if (data.extra.timeline && data.extra.timeline.length > 0) {
+        extraHtml += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;">'
+          + '<p style="font-size:13px;color:#999;margin-bottom:8px;">案件时间线：</p>'
+          + data.extra.timeline.map(t => `<p style="font-size:13px;color:#666;margin:4px 0;"><span style="color:#0f3460;font-weight:600;">${t.at}</span> ${t.event}</p>`).join('')
+          + '</div>';
+      }
+    }
+
+    area.innerHTML = `
+      <div class="result-card">
+        <span class="risk-badge ${badgeClass}">${data.levelLabel || data.level}</span>
+        <h3>${toolLabel}结果：${data.normalizedInput?.normalizedValue || input}</h3>
+        <p>输入类型：${inputType} | 任务编号：${data.id?.slice(0,8)}...</p>
+        <p style="margin-top:8px;color:#333;font-weight:500;">${data.summary || '暂未发现明显风险'}</p>
+        ${extraHtml}
+        ${evidenceHtml}
+        <ul class="action-list">
+          ${(data.recommendedActions || []).map(a => '<li>' + a + '</li>').join('')}
+        </ul>
+      </div>
+    `;
+  } catch (e) {
+    area.innerHTML = '<div class="result-card"><p style="color:#e94560;">接口连接失败，请确认后端服务已启动（端口 3000）。</p></div>';
+  }
+}
+
+function showUnlockModal() {
+  if (!latestReportId) {
+    showToast('请先完成一次检测，再解锁完整报告');
+    switchTab('home');
+    return;
+  }
+  document.getElementById('unlockModal').classList.add('show');
+}
+
+async function unlockReport() {
+  if (!latestReportId) {
+    showToast('请先完成一次检测');
+    return;
+  }
+
+  const email = document.getElementById('unlockEmail').value.trim();
+  const phone = document.getElementById('unlockPhone').value.trim();
+  if (!email && !phone) {
+    showToast('请输入邮箱或手机号');
+    return;
+  }
+
+  try {
+    const unlockRes = await fetch(API + '/api/reports/' + latestReportId + '/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, phone })
+    });
+    const unlockData = await unlockRes.json();
+    if (!unlockRes.ok) throw new Error(unlockData.message || 'unlock failed');
+
+    const fullReportUrl = unlockData.fullReportUrl || latestReportUrl;
+    const reportRes = await fetch(API + fullReportUrl);
+    const report = await reportRes.json();
+    if (!reportRes.ok) throw new Error(report.message || 'report failed');
+
+    latestQueryResult = { ...latestQueryResult, unlocked: true };
+    renderFullReport(report);
+    document.getElementById('unlockModal').classList.remove('show');
+    switchTab('report');
+    showToast('完整报告已解锁');
+  } catch (e) {
+    showToast(e.message || '解锁失败，请检查后端服务');
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+document.getElementById('unlockModal').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('show');
+});
+</script>
+</body>
+</html>

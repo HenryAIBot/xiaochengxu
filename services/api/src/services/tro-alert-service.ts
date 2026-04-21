@@ -6,15 +6,19 @@ export class TroAlertService {
 
   async run(target: string) {
     const payload = await this.connector.search(target);
-    const signals: DetectionSignal[] = payload.results.map((result) => ({
-      source: "courtlistener",
-      level: result.snippet
+    const signals: DetectionSignal[] = payload.results.map((result) => {
+      const hasTro = result.snippet
         .toLowerCase()
-        .includes("temporary restraining order")
-        ? "suspected_high"
-        : "watch",
-      reason: `${result.caseName}: ${result.snippet}`,
-    }));
+        .includes("temporary restraining order");
+
+      return {
+        source: "courtlistener",
+        level: hasTro ? "suspected_high" : "watch",
+        reason: hasTro
+          ? `发现相关临时限制令案件：${result.caseName}`
+          : `发现相关法院案件：${result.caseName}`,
+      };
+    });
 
     return {
       preview: buildPreview({

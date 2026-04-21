@@ -10,7 +10,7 @@ export class BlankInputError extends Error {
   readonly code = "BLANK_INPUT" as const;
 
   constructor() {
-    super("Input cannot be blank");
+    super("输入不能为空");
     this.name = "BlankInputError";
   }
 }
