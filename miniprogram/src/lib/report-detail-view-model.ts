@@ -19,6 +19,8 @@ export interface ReportDetail {
     }>;
     recommendedActions: string[];
     extra: unknown;
+    dataSource?: string;
+    reportCreatedAt?: string | null;
   };
 }
 
@@ -35,6 +37,7 @@ export interface FullReportViewModel {
     reason: string;
   }>;
   actions: string[];
+  dataSource?: string;
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -75,5 +78,6 @@ export function toFullReportViewModel(
       report.preview.recommendedActions.length > 0
         ? report.preview.recommendedActions
         : ["继续观察"],
+    dataSource: report.preview.dataSource,
   };
 }

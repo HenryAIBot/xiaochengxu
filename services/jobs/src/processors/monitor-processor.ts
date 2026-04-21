@@ -2,10 +2,20 @@ type PreviewLevel = "clear" | "watch" | "suspected_high" | "confirmed";
 
 interface MonitorJob {
   monitorId: string;
+  notifyEmail?: string | null;
+  notifyPhone?: string | null;
   preview: {
     level: PreviewLevel;
     summary: string;
   };
+}
+
+interface SaveMessageInput {
+  monitorId: string;
+  level: PreviewLevel;
+  channel: "email" | "sms" | "system";
+  to: string | null;
+  body: string;
 }
 
 interface MonitorProcessorPorts {
@@ -15,7 +25,7 @@ interface MonitorProcessorPorts {
     html: string;
   }) => Promise<unknown>;
   sendSms: (input: { to: string; body: string }) => Promise<unknown>;
-  saveMessage: (input: { channel: string; body: string }) => Promise<unknown>;
+  saveMessage: (input: SaveMessageInput) => Promise<unknown>;
 }
 
 const LEVEL_LABELS: Record<PreviewLevel, string> = {
@@ -30,22 +40,55 @@ export async function runMonitorProcessor(
   ports: MonitorProcessorPorts,
 ) {
   if (job.preview.level === "clear") {
-    return;
+    return { skipped: true as const };
   }
 
-  await ports.sendEmail({
-    to: "ops@example.com",
-    subject: `监控 ${job.monitorId} 命中${LEVEL_LABELS[job.preview.level]}`,
-    html: `<p>${job.preview.summary}</p>`,
-  });
+  const levelLabel = LEVEL_LABELS[job.preview.level];
+  const subject = `监控 ${job.monitorId} 命中${levelLabel}`;
+  const emailBody = `<p>${job.preview.summary}</p>`;
+  const smsBody = `${levelLabel}：${job.preview.summary}`;
+  const delivered: Array<"email" | "sms"> = [];
 
-  await ports.sendSms({
-    to: "+15551234567",
-    body: `${LEVEL_LABELS[job.preview.level]}：${job.preview.summary}`,
-  });
+  if (job.notifyEmail) {
+    await ports.sendEmail({
+      to: job.notifyEmail,
+      subject,
+      html: emailBody,
+    });
+    await ports.saveMessage({
+      monitorId: job.monitorId,
+      level: job.preview.level,
+      channel: "email",
+      to: job.notifyEmail,
+      body: job.preview.summary,
+    });
+    delivered.push("email");
+  }
 
-  await ports.saveMessage({
-    channel: "system",
-    body: job.preview.summary,
-  });
+  if (job.notifyPhone) {
+    await ports.sendSms({
+      to: job.notifyPhone,
+      body: smsBody,
+    });
+    await ports.saveMessage({
+      monitorId: job.monitorId,
+      level: job.preview.level,
+      channel: "sms",
+      to: job.notifyPhone,
+      body: smsBody,
+    });
+    delivered.push("sms");
+  }
+
+  if (delivered.length === 0) {
+    await ports.saveMessage({
+      monitorId: job.monitorId,
+      level: job.preview.level,
+      channel: "system",
+      to: null,
+      body: `${subject}：${job.preview.summary}（未配置通知渠道）`,
+    });
+  }
+
+  return { skipped: false as const, delivered };
 }

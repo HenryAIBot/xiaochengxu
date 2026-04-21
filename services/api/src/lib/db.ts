@@ -77,6 +77,25 @@ function initializeSchema(db: QueryTaskDatabase) {
       body TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      last_seen_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS consultations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      name TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      note TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      advisor TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    );
   `);
 
   ensureColumn(db, "reports", "evidence_json", "TEXT NOT NULL DEFAULT '[]'");
@@ -91,6 +110,20 @@ function initializeSchema(db: QueryTaskDatabase) {
   ensureColumn(db, "leads", "source_task_id", "TEXT");
   ensureColumn(db, "leads", "source_tool", "TEXT");
   ensureColumn(db, "leads", "source_input", "TEXT");
+  ensureColumn(db, "messages", "monitor_id", "TEXT");
+  ensureColumn(db, "messages", "level", "TEXT");
+  ensureColumn(db, "messages", "to_address", "TEXT");
+  ensureColumn(db, "query_tasks", "failure_reason", "TEXT");
+  ensureColumn(db, "query_tasks", "updated_at", "TEXT");
+  ensureColumn(db, "reports", "data_source", "TEXT");
+  ensureColumn(db, "reports", "created_at", "TEXT");
+  ensureColumn(db, "reports", "source_fetched_at", "TEXT");
+  ensureColumn(db, "monitors", "last_preview_level", "TEXT");
+  ensureColumn(db, "monitors", "last_preview_summary", "TEXT");
+  ensureColumn(db, "monitors", "last_checked_at", "TEXT");
+  ensureColumn(db, "query_tasks", "user_id", "TEXT");
+  ensureColumn(db, "monitors", "user_id", "TEXT");
+  ensureColumn(db, "leads", "user_id", "TEXT");
 }
 
 export function createQueryTaskDatabase(filePath = DEFAULT_DB_PATH) {

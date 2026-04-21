@@ -8,7 +8,10 @@
     "lint": "biome check src"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^10.3.0",
     "@xiaochengxu/core": "workspace:*",
+    "@xiaochengxu/queue": "workspace:*",
+    "@xiaochengxu/tools": "workspace:*",
     "better-sqlite3": "^11.8.1",
     "fastify": "^5.2.2"
   },

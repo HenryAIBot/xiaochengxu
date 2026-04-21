@@ -10,6 +10,7 @@ export interface QueryTaskRecord {
   normalizedInput: string;
   status: "queued";
   createdAt: string;
+  userId: string | null;
 }
 
 export class QueryTaskRepository {
@@ -19,6 +20,7 @@ export class QueryTaskRepository {
     tool: ToolName;
     rawInput: string;
     normalizedInput: NormalizedInput;
+    userId?: string | null;
   }): QueryTaskRecord {
     const record: QueryTaskRecord = {
       id: randomUUID(),
@@ -28,12 +30,13 @@ export class QueryTaskRepository {
       normalizedInput: input.normalizedInput.normalizedValue,
       status: "queued",
       createdAt: new Date().toISOString(),
+      userId: input.userId ?? null,
     };
 
     this.db
       .prepare(
-        `INSERT INTO query_tasks (id, tool, input_kind, raw_input, normalized_input, status, created_at)
-         VALUES (@id, @tool, @inputKind, @rawInput, @normalizedInput, @status, @createdAt)`,
+        `INSERT INTO query_tasks (id, tool, input_kind, raw_input, normalized_input, status, created_at, user_id)
+         VALUES (@id, @tool, @inputKind, @rawInput, @normalizedInput, @status, @createdAt, @userId)`,
       )
       .run(record);
 

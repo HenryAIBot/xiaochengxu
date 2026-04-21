@@ -2,7 +2,6 @@ import { View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { HomeScreen } from "../../components/home-screen";
 import { createQueryTask, listStoreProducts } from "../../lib/api";
-import { saveQueryResult } from "../../lib/query-result-cache";
 
 export default function HomePage() {
   return (
@@ -20,9 +19,8 @@ export default function HomePage() {
           }
 
           const task = await createQueryTask(payload);
-          saveQueryResult(task);
           Taro.navigateTo({
-            url: `/pages/result/index?id=${task.id}`,
+            url: `/pages/result/index?id=${task.taskId}`,
           });
         }}
       />

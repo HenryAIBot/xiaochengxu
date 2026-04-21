@@ -896,7 +896,7 @@ function searchTrademarks(term: string): TrademarkRecord[] {
   return [];
 }
 
-export class RealUsptoTrademarkConnector {
+export class FixtureUsptoTrademarkConnector {
   async searchMarks(term: string) {
     const marks = searchTrademarks(term);
     if (marks.length > 0) {

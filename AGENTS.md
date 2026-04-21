@@ -22,9 +22,11 @@
 
 - `docs/superpowers/specs/`：产品设计、实现计划、关键决策文档
 - `miniprogram/`：微信小程序前端
-- `services/api/`：对外 API、鉴权、任务入口
-- `services/jobs/`：定时任务、抓取任务、监控任务、通知任务
-- `packages/core/`：领域模型、规则引擎、报告模型、共享工具
+- `services/api/`：对外 API、鉴权、任务入口、内部回写端点
+- `services/jobs/`：BullMQ Worker 与 processors（查询、通知、监控定时触发）
+- `packages/core/`：领域模型、风险分级、报告预览
+- `packages/tools/`：外部连接器（当前为 fixture）与工具服务，统一入口 `createDefaultToolExecutor` / `createDefaultMonitorChecker`
+- `packages/queue/`：BullMQ 队列定义、`QueueClient` 接口、Redis 连接工厂
 - `scripts/`：开发脚本、导入脚本、运维脚本
 - `tests/`：端到端测试和跨模块集成测试
 

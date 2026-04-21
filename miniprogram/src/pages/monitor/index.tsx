@@ -1,28 +1,38 @@
 import { View } from "@tarojs/components";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MonitorListScreen } from "../../components/monitor-list-screen";
-import { type MonitorListItem, listMonitors } from "../../lib/api";
+import {
+  type MonitorListItem,
+  deleteMonitor,
+  listMonitors,
+  updateMonitorStatus,
+} from "../../lib/api";
 
 export default function MonitorPage() {
   const [monitors, setMonitors] = useState<MonitorListItem[]>([]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    listMonitors().then((result) => {
-      if (isMounted) {
-        setMonitors(result.items);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-    };
+  const reload = useCallback(async () => {
+    const result = await listMonitors();
+    setMonitors(result.items);
   }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   return (
     <View>
-      <MonitorListScreen monitors={monitors} />
+      <MonitorListScreen
+        monitors={monitors}
+        onToggleStatus={async (id, next) => {
+          await updateMonitorStatus(id, next);
+          await reload();
+        }}
+        onDelete={async (id) => {
+          await deleteMonitor(id);
+          await reload();
+        }}
+      />
     </View>
   );
 }

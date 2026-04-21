@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { buildApp, createInMemoryDb } from "../../services/api/src/app.js";
+import { createAndProcessQuery } from "../helpers/run-worker.js";
 
 describe("report unlock and monitor routes", () => {
   let db = createInMemoryDb();
@@ -10,7 +11,6 @@ describe("report unlock and monitor routes", () => {
       await app.close();
       app = null;
     }
-
     db.close();
     db = createInMemoryDb();
   });
@@ -18,23 +18,15 @@ describe("report unlock and monitor routes", () => {
   it("unlocks an existing report, creates a monitor, and lists storefront candidates", async () => {
     app = buildApp({ db });
 
-    const query = await app.inject({
-      method: "POST",
-      url: "/api/query-tasks",
-      payload: {
-        tool: "tro_alert",
-        input: "nike",
-      },
+    const { taskId, reportId } = await createAndProcessQuery(app, {
+      tool: "tro_alert",
+      input: "nike",
     });
-    const reportId = query.json().reportId as string;
 
     const unlock = await app.inject({
       method: "POST",
       url: `/api/reports/${reportId}/unlock`,
-      payload: {
-        email: "seller@example.com",
-        phone: "+15551234567",
-      },
+      payload: { email: "seller@example.com", phone: "+15551234567" },
     });
 
     expect(unlock.statusCode).toBe(200);
@@ -119,7 +111,7 @@ describe("report unlock and monitor routes", () => {
       email: "seller@example.com",
       phone: "+15551234567",
       sourceReportId: reportId,
-      sourceTaskId: query.json().id,
+      sourceTaskId: taskId,
       sourceTool: "tro_alert",
       sourceInput: "nike",
     });
@@ -161,18 +153,14 @@ describe("report unlock and monitor routes", () => {
   it("rejects report unlock without contact information", async () => {
     app = buildApp({ db });
 
-    const query = await app.inject({
-      method: "POST",
-      url: "/api/query-tasks",
-      payload: {
-        tool: "tro_alert",
-        input: "nike",
-      },
+    const { reportId } = await createAndProcessQuery(app, {
+      tool: "tro_alert",
+      input: "nike",
     });
 
     const unlock = await app.inject({
       method: "POST",
-      url: `/api/reports/${query.json().reportId}/unlock`,
+      url: `/api/reports/${reportId}/unlock`,
       payload: {},
     });
 

@@ -20,6 +20,9 @@ interface StoredReportRow {
   rawInput: string;
   normalizedInput: string;
   createdAt: string;
+  taskUserId: string | null;
+  dataSource: string | null;
+  reportCreatedAt: string | null;
 }
 
 function parseJsonField<T>(value: string | null, fallback: T): T {
@@ -49,12 +52,22 @@ function getReport(app: FastifyInstance, reportId: string) {
               query_tasks.input_kind AS inputKind,
               query_tasks.raw_input AS rawInput,
               query_tasks.normalized_input AS normalizedInput,
-              query_tasks.created_at AS createdAt
+              query_tasks.created_at AS createdAt,
+              query_tasks.user_id AS taskUserId,
+              reports.data_source AS dataSource,
+              reports.created_at AS reportCreatedAt
        FROM reports
        INNER JOIN query_tasks ON query_tasks.id = reports.task_id
        WHERE reports.id = ?`,
     )
     .get(reportId) as StoredReportRow | undefined;
+}
+
+function canAccessReport(
+  report: StoredReportRow | undefined,
+  userId: string | null,
+): report is StoredReportRow {
+  return !!report && report.taskUserId === userId;
 }
 
 function serializeReport(row: StoredReportRow) {
@@ -78,6 +91,8 @@ function serializeReport(row: StoredReportRow) {
         [],
       ),
       extra: parseJsonField<unknown | null>(row.extraJson, null),
+      dataSource: row.dataSource ?? "fixture",
+      reportCreatedAt: row.reportCreatedAt,
     },
   };
 }
@@ -86,8 +101,9 @@ export async function registerReportRoutes(app: FastifyInstance) {
   app.get("/api/reports/:reportId", async (request, reply) => {
     const { reportId } = request.params as { reportId: string };
     const report = getReport(app, reportId);
+    const userId = request.user?.id ?? null;
 
-    if (!report) {
+    if (!canAccessReport(report, userId)) {
       return reply.code(404).send({
         code: "REPORT_NOT_FOUND",
         message: "报告不存在",
@@ -100,8 +116,9 @@ export async function registerReportRoutes(app: FastifyInstance) {
   app.post("/api/reports/:reportId/unlock", async (request, reply) => {
     const { reportId } = request.params as { reportId: string };
     const report = getReport(app, reportId);
+    const userId = request.user?.id ?? null;
 
-    if (!report) {
+    if (!canAccessReport(report, userId)) {
       return reply.code(404).send({
         code: "REPORT_NOT_FOUND",
         message: "报告不存在",
@@ -122,8 +139,8 @@ export async function registerReportRoutes(app: FastifyInstance) {
     app.db
       .prepare(
         `INSERT INTO leads (
-          id, email, phone, source_report_id, source_task_id, source_tool, source_input, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, email, phone, source_report_id, source_task_id, source_tool, source_input, created_at, user_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         randomUUID(),
@@ -134,6 +151,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
         report.tool,
         report.normalizedInput,
         new Date().toISOString(),
+        request.user?.id ?? null,
       );
 
     app.db

@@ -1,27 +1,93 @@
 import Taro from "@tarojs/taro";
-import type { QueryTaskResult } from "./query-result-view-model";
+import { readCachedToken } from "./auth";
 import type { ReportDetail } from "./report-detail-view-model";
 
-const API_BASE = "http://127.0.0.1:3000";
+const API_BASE =
+  (typeof process !== "undefined" && process.env?.TARO_APP_API_BASE) ||
+  "http://127.0.0.1:3000";
+
+function buildHeader(init: {
+  contentType?: boolean;
+  withAuth?: boolean;
+}): Record<string, string> | undefined {
+  const header: Record<string, string> = {};
+  if (init.contentType) {
+    header["Content-Type"] = "application/json";
+  }
+  if (init.withAuth !== false) {
+    const token = readCachedToken();
+    if (token) {
+      header.Authorization = `Bearer ${token}`;
+    }
+  }
+  return Object.keys(header).length > 0 ? header : undefined;
+}
+
+export interface CreateQueryTaskResponse {
+  taskId: string;
+  status: string;
+  normalizedInput: {
+    kind: string;
+    rawValue?: string;
+    normalizedValue: string;
+  };
+}
+
+export interface QueryTaskStatusResponse {
+  taskId: string;
+  status: string;
+  tool: string;
+  normalizedInput: {
+    kind: string;
+    rawValue?: string;
+    normalizedValue: string;
+  };
+  createdAt: string;
+  updatedAt?: string | null;
+  reportId?: string;
+  failureReason?: string;
+  result?: {
+    level: string;
+    levelLabel: string;
+    summary: string;
+    evidence: Array<{ source: string; level: string; reason: string }>;
+    recommendedActions: string[];
+    extra?: unknown;
+    dataSource?: string;
+    createdAt?: string | null;
+  };
+}
 
 export async function createQueryTask(input: {
   tool: string;
   input: string;
-}): Promise<QueryTaskResult> {
+}): Promise<CreateQueryTaskResponse> {
   const response = await Taro.request({
     url: `${API_BASE}/api/query-tasks`,
     method: "POST",
-    header: { "Content-Type": "application/json" },
+    header: buildHeader({ contentType: true }),
     data: input,
   });
 
-  return response.data as QueryTaskResult;
+  return response.data as CreateQueryTaskResponse;
+}
+
+export async function getQueryTask(
+  taskId: string,
+): Promise<QueryTaskStatusResponse> {
+  const response = await Taro.request({
+    url: `${API_BASE}/api/query-tasks/${taskId}`,
+    method: "GET",
+    header: buildHeader({}),
+  });
+  return response.data as QueryTaskStatusResponse;
 }
 
 export async function listStoreProducts(storeName: string) {
   const response = await Taro.request({
     url: `${API_BASE}/api/storefronts/${encodeURIComponent(storeName)}/products`,
     method: "GET",
+    header: buildHeader({}),
   });
   return response.data;
 }
@@ -33,7 +99,7 @@ export async function unlockReport(
   const response = await Taro.request({
     url: `${API_BASE}/api/reports/${reportId}/unlock`,
     method: "POST",
-    header: { "Content-Type": "application/json" },
+    header: buildHeader({ contentType: true }),
     data: input,
   });
 
@@ -49,7 +115,7 @@ export async function createMonitor(input: {
   const response = await Taro.request({
     url: `${API_BASE}/api/monitors`,
     method: "POST",
-    header: { "Content-Type": "application/json" },
+    header: buildHeader({ contentType: true }),
     data: input,
   });
 
@@ -69,24 +135,94 @@ export async function listMonitors(): Promise<{ items: MonitorListItem[] }> {
   const response = await Taro.request({
     url: `${API_BASE}/api/monitors`,
     method: "GET",
+    header: buildHeader({}),
   });
 
   return response.data as { items: MonitorListItem[] };
+}
+
+export async function updateMonitorStatus(
+  id: string,
+  status: "active" | "paused",
+) {
+  const response = await Taro.request({
+    url: `${API_BASE}/api/monitors/${id}`,
+    method: "PATCH",
+    header: buildHeader({ contentType: true }),
+    data: { status },
+  });
+  return response.data;
+}
+
+export async function deleteMonitor(id: string) {
+  await Taro.request({
+    url: `${API_BASE}/api/monitors/${id}`,
+    method: "DELETE",
+    header: buildHeader({}),
+  });
 }
 
 export async function getReport(reportId: string): Promise<ReportDetail> {
   const response = await Taro.request({
     url: `${API_BASE}/api/reports/${reportId}`,
     method: "GET",
+    header: buildHeader({}),
   });
 
   return response.data as ReportDetail;
 }
 
-export async function listMessages() {
+export interface MessageItem {
+  id: string;
+  channel: "email" | "sms" | "system";
+  body: string;
+  monitorId: string | null;
+  level: string | null;
+  toAddress: string | null;
+  createdAt: string;
+}
+
+export interface ConsultationItem {
+  id: string;
+  name: string;
+  phone: string;
+  note: string | null;
+  status: string;
+  advisor: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export async function createConsultation(input: {
+  name: string;
+  phone: string;
+  note?: string;
+}): Promise<ConsultationItem> {
+  const response = await Taro.request({
+    url: `${API_BASE}/api/consultations`,
+    method: "POST",
+    header: buildHeader({ contentType: true }),
+    data: input,
+  });
+  return response.data as ConsultationItem;
+}
+
+export async function listConsultations(): Promise<{
+  items: ConsultationItem[];
+}> {
+  const response = await Taro.request({
+    url: `${API_BASE}/api/consultations`,
+    method: "GET",
+    header: buildHeader({}),
+  });
+  return response.data as { items: ConsultationItem[] };
+}
+
+export async function listMessages(): Promise<MessageItem[]> {
   const response = await Taro.request({
     url: `${API_BASE}/api/messages`,
     method: "GET",
+    header: buildHeader({}),
   });
-  return response.data;
+  return (response.data as MessageItem[]) ?? [];
 }

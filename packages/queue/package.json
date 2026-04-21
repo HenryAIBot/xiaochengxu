@@ -1,0 +1,21 @@
+{
+  "name": "@xiaochengxu/queue",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "bullmq": "^5.41.5",
+    "ioredis": "^5.5.0"
+  }
+}

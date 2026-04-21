@@ -1,267 +1,227 @@
 # 项目现状盘点
 
-> 盘点日期：2026-04-21  
-> 目标：记录当前代码结构、已完成能力、未完成能力和优化建议，作为后续任务状态更新的基准。
+> 原始盘点日期：2026-04-21
+> 最近更新：2026-04-21（经过 7 轮迭代，详见文末 `最近变更日志`）
 
 ## 一句话结论
 
-当前项目已经完成 V1 骨架和主要查询闭环：小程序可以从首页发起检测，API 可以同步生成查询结果和报告预览，结果页可以展示风险分诊并进入报告解锁。
+项目已从"可演示原型"推进到"异步工具链 + 监控自动触发 + 通知落地闭环"全链路可跑通。POST 查询会入队并异步处理，前端轮询展示 loading/error/retry；监控由 BullMQ 每 5 分钟自动轮询，命中触发 SMTP（Mailpit）邮件 + 站内消息；前端消息中心列出历史通知；演示数据标注透明化。
 
-但当前状态仍是 `可演示原型`，不是生产可用版本。主要差距在于真实数据源、异步任务、监控通知、报告详情、顾问承接、鉴权和部署配置。
+**仍未做**：鉴权、真实外部 API、顾问承接 UI、生产化部署（多实例 DB、速率限制）。
 
 ## 当前代码结构
 
-- `miniprogram/`：Taro + React 微信小程序。包含首页、商品选择页、结果页、报告解锁页、监控页、消息页、我的页。
-- `services/api/`：Fastify API。包含查询任务、报告解锁、监控创建、消息列表、线索、店铺商品候选接口。
-- `services/jobs/`：BullMQ jobs。包含查询任务处理器、监控处理器、邮件和短信 provider 占位实现。
-- `packages/core/`：共享领域模型。包含输入归一化、风险分级、报告预览构建。
-- `tests/`：跨模块测试、API 测试、jobs 测试、端到端查询流程测试和 fixtures。
-- `docs/superpowers/specs/`：产品设计、关键设计文档和当前状态文档。
-- `docs/superpowers/plans/`：实施计划和任务拆分。
-- `scripts/`：本地开发辅助脚本。
-- `demo/`：独立 HTML demo，不属于核心生产链路。
+```
+xiaochengxu/
+├── miniprogram/                 Taro + React 小程序
+├── services/
+│   ├── api/                     Fastify + better-sqlite3 + JSON Schema 校验
+│   └── jobs/                    BullMQ Worker（3 队列 + monitor-tick scheduler）
+├── packages/
+│   ├── core/                    领域模型：输入归一化、风险分级、报告预览
+│   ├── tools/                   连接器（fixture）+ 工具服务 + runQueryTool / runMonitorCheck 工厂
+│   └── queue/                   QueueClient 接口 + BullMQ 队列 + Redis 连接工厂
+├── scripts/                     dev 启动脚本
+├── tests/                       跨模块、API、jobs、tools、e2e 测试
+└── docs/superpowers/            设计文档、状态盘点、实施记录
+```
 
 ## 已完成能力
 
-### 工作空间与工程化
+### 工程化
 
-- 已建立 `pnpm` monorepo。
-- 已拆分 `miniprogram`、`services/api`、`services/jobs`、`packages/core`。
-- 根脚本已有：
-  - `pnpm lint`
-  - `pnpm test`
-  - `pnpm build`
-- 已配置 Biome、Vitest、TypeScript、Taro、Fastify、SQLite。
-- 已提供本地开发说明和 `docker-compose.yml`。
+- pnpm monorepo，7 个工作区项目
+- Biome lint + Vitest 测试 + TypeScript 严格模式
+- `pnpm lint` / `pnpm test` / `pnpm build` 全绿
+- `docker-compose.yml`：Redis + Mailpit
+- `.env.example` 覆盖所有关键变量（API_PORT、API_BASE_URL、REDIS_URL、SMTP_*、MONITOR_TICK_INTERVAL_MS、TARO_APP_API_BASE）
+- `services/api/data/*.sqlite` 已脱离 git
 
 ### 核心领域能力
 
-- 支持统一输入归一化：
-  - ASIN
-  - Amazon 商品链接
-  - 品牌词
-  - 店铺名
-  - 案件号
-- 已定义统一风险等级：
-  - `clear`
-  - `watch`
-  - `suspected_high`
-  - `confirmed`
-- 已实现按证据选择最高风险等级。
-- 已实现报告预览模型：
-  - 风险等级
-  - 摘要
-  - 最多 3 条证据
-  - 建议动作
+- 统一输入归一化：ASIN / Amazon URL / 品牌词 / 店铺名 / 案件号
+- 风险等级：`clear` / `watch` / `suspected_high` / `confirmed`
+- 按证据选最高风险等级
+- 报告预览：风险等级、摘要、最多 3 条证据、建议动作
 
-### API 能力
+### 工具执行（packages/tools）
 
-- `GET /health` 可用。
-- `POST /api/query-tasks` 可同步完成查询并返回结果。
-- `GET /api/query-tasks/:taskId` 可读取任务和报告记录。
-- `GET /api/reports/:reportId` 可读取报告详情、查询来源、证据、建议动作和解锁状态。
-- `POST /api/reports/:reportId/unlock` 可记录联系方式、更新报告解锁状态，并写入来源归因。
-- `POST /api/monitors` 可创建监控记录。
-- `GET /api/monitors` 可读取监控列表。
-- `GET /api/messages` 可读取站内消息。
-- `POST /api/leads` 可创建线索。
-- `GET /api/storefronts/:storeName/products` 可返回店铺代表商品候选。
-- SQLite schema 已覆盖：
-  - `query_tasks`
-  - `reports`
-  - `leads`，包含报告、任务、工具和输入来源归因
-  - `monitors`
-  - `messages`
+- `createDefaultToolExecutor()` → `runQueryTool({ tool, normalizedInput })`
+- `createDefaultMonitorChecker()` + `pickMonitorTool(targetKind)` → 按监控目标自动路由到合适工具
+- 所有连接器当前使用内置 fixture 样本数据；类名已从 `Real*` 改为 `Fixture*`；首次使用会输出 `console.warn` 提醒
+- 结果带 `dataSource: "fixture"` 字段，前端据此渲染"演示数据"徽章
 
-### 查询服务能力
+### API（services/api）
 
-- `TRO 预警`：根据法院案件搜索结果生成 TRO/案件风险信号。
-- `侵权体检`：
-  - ASIN 输入会提取 listing 品牌，再查商标信号。
-  - 品牌词输入会直接查商标信号。
-- `案件进展`：根据 docket entries 生成中文案件时间线和风险摘要。
-- `店铺名输入`：已有代表商品候选服务和前端选择页。
+- `GET /health`
+- `POST /api/query-tasks` → 202 + `{ taskId, status: "pending" }`；入队到 BullMQ
+- `GET /api/query-tasks/:taskId` → 按 status 返回 `queued` / `completed` + report / `failed` + reason
+- `GET /api/query-tasks/:taskId/raw` → 供 worker 取任务元数据
+- `POST /api/internal/query-tasks/:taskId/result` → worker 回写结果或失败原因
+- `GET /api/reports/:reportId`、`POST /api/reports/:reportId/unlock`
+- `POST /api/monitors`、`GET /api/monitors`（JSON Schema 校验 targetKind 枚举、email 格式、phone pattern、case_number 支持）
+- `POST /api/internal/monitors/:monitorId/check` → 调 `runMonitorCheck`；变化则 `enqueueNotification`；更新 `monitors.last_preview_*`
+- `GET /api/messages`、`POST /api/messages`（JSON Schema 校验 channel/body）
+- `POST /api/leads`（JSON Schema：至少一个联系方式；email/phone 格式）
+- `GET /api/storefronts/:storeName/products`
+- SQLite schema：`query_tasks` (含 status/failure_reason/updated_at)、`reports` (含 data_source/created_at)、`leads`、`monitors` (含 last_preview_level/last_preview_summary/last_checked_at)、`messages` (含 monitor_id/level/to_address)
 
-### 小程序能力
+### 异步任务（services/jobs）
 
-- 首页支持输入 `品牌词 / 店铺名 / ASIN`。
-- 首页支持选择：
-  - 侵权体检
-  - TRO 预警
-  - 案件进展
-- 侵权体检 + 店铺名输入会进入商品候选页。
-- 查询结果会缓存到本地，并按任务 ID 进入结果页。
-- 结果页已展示：
-  - 工具名
-  - 风险等级
-  - 摘要
-  - 更新时间
-  - 关键证据
-  - 建议动作
-  - 解锁完整报告
-  - 加入监控
-  - 联系顾问
-- 报告页支持邮箱或手机号任选其一解锁。
-- 结果页点击 `加入监控` 已会基于当前查询对象调用 `POST /api/monitors` 创建监控记录，并跳转监控页。
-- 监控页已读取 `/api/monitors` 展示真实监控列表。
-- 小程序正式报告页已在解锁后拉取 `GET /api/reports/:reportId`，展示查询对象、检测类型、风险等级、完整证据和处理清单。
-- `demo/index.html` 已支持一次查询后保存真实 `reportId`，解锁后直接拉取并展示完整报告内容。
-- 消息页可以读取消息接口。
-- 监控页和我的页已有基础占位。
+- Worker 启动时用 `upsertJobScheduler` 注册 `monitor-tick` 定时任务（默认 5 分钟）
+- 3 条队列：
+  - `query-processing`：`query-task-processor` 调 runQueryTool + fetch 回写
+  - `notifications`：`monitor-processor` 发 email（Mailpit SMTP via nodemailer）+ SMS（mock）+ POST /api/messages 落库
+  - `monitor-poll`：`monitor-tick-processor` 遍历 active 监控逐个 fetch check endpoint
+- Email provider 真连 Mailpit；缺 SMTP env 时退化 mock
+- SMS provider 目前只有 mock（在非 test 环境打日志）
+- 监控处理器正确读取 `notifyEmail` / `notifyPhone`，不再硬编码
 
-### 测试覆盖
+### 小程序
 
-- workspace 冒烟测试。
-- core 输入归一化、风险分级、报告预览测试。
-- API 查询任务、报告解锁、监控、店铺候选测试。
-- 查询服务测试。
-- jobs 监控通知处理器测试。
-- 小程序首页、结果页、报告解锁页、结果视图模型测试。
-- 端到端 API 查询、解锁、监控流程测试。
+- Taro + React，7 页
+- 首页支持 3 种工具 + 4 种输入
+- 结果页三态机：loading（骨架文案"检测中…"）/ completed（ResultScreen） / failed（错误信息 + 重试按钮）
+- 结果页若 cache 命中直接渲染；否则 `pollUntil` 每 1.5s 查询任务状态，30s 超时
+- ResultScreen 在 `dataSource === "fixture"` 时显示"演示数据（非真实 API）"徽章
+- 监控页读取 `/api/monitors` 真实列表
+- 报告页解锁后拉取并展示完整报告详情
+- 消息页 loading / error / empty / ready 四态，渲染完整消息列表（渠道中文名 / 风险等级 / 本地时间 / body / 收件人）
+- `API_BASE` 改为 `process.env.TARO_APP_API_BASE` 环境变量注入
+
+### 测试覆盖（27 files / 91 tests）
+
+- workspace 冒烟
+- core 领域（输入归一化 / 风险 / 报告预览）
+- tools（工具服务 + runQueryTool + runMonitorCheck + pickMonitorTool）
+- API（query 任务生命周期、内部回写、monitor check、report/unlock/leads/messages CRUD、JSON Schema 拒绝脏数据）
+- jobs（query-task-processor、monitor-processor、monitor-tick-processor、redis options）
+- e2e（enqueue → 处理 → unlock → monitor）
+- miniprogram（结果页三态、消息页三态、MessageListScreen、ResultScreen、ReportUnlockScreen、HomeScreen、polling 工具、view-model）
 
 ## 未完成能力
 
 ### 真实数据源
 
-- 当前 `Real*Connector` 实际是内置样本数据和规则匹配，不是实时调用 Amazon、USPTO、CourtListener 或 PACER。
-- 未完成真实外部 API 凭证、限流、失败重试、缓存、数据保鲜策略。
-- 未完成对数据来源时间、可复核链接、证据出处的完整展示。
+- CourtListener v4 已可 live（env `COURTLISTENER_API_TOKEN`）
+- USPTO 已有**可插拔**live connector（env `USPTO_SEARCH_URL_TEMPLATE` + 可选 auth header）；需要自备代理服务
+- Amazon listing 仍是 fixture —— 没有公开免费 API，生产需接 Keepa / Rainforest 等付费 API
+- 已做：响应 TTL 缓存（5 min，env `TOOL_CACHE_TTL_MS`）、`sourceFetchedAt` 字段
+- 未做：外部 API 限流（per-provider）、"可复核原始链接"字段
+- 未做：USPTO live connector 的真实 endpoint 验证（只通过 mock fetch 测试）
 
-### 异步任务与队列
+### 鉴权与访问控制
 
-- API 当前同步执行查询，没有真正把查询任务投递到 `queryQueue`。
-- `runQueryTaskProcessor` 目前只返回 `processed`，没有执行真实查询或落库。
-- `monitorQueue` 已声明但未形成轮询链路。
-- jobs worker 没有和 API SQLite 仓储打通。
+- 身份识别：`POST /api/auth/anonymous` + Bearer token + `user_id` 列
+- 授权过滤：按 `request.user.id` 过滤所有 GET；匿名只见 `user_id IS NULL`
+- 内部路由：`INTERNAL_API_TOKEN` + `x-internal-token` 头；`GET /api/internal/query-tasks/:id/raw` 也在保护范围内
+- 速率限制：`@fastify/rate-limit` 默认 60/min，env `RATE_LIMIT_REDIS_URL` 切 Redis store 支持多实例
+- 审计日志：onResponse hook 记录 method/url/status/userId/durationMs；生产 JSON 行结构化
+- 未做：**WeChat 真 openid 流**（需 appid/secret 对接微信官方）
+- 未做：错误监控（Sentry / APM）
 
-### 持续监控与通知
+### 顾问承接与商业转化
 
-- 小程序结果页的 `加入监控` 已创建真实监控记录。
-- 监控页已读取真实监控列表。
-- 监控处理器使用硬编码收件人和手机号，没有读取用户创建监控时的联系方式。
-- 站内消息保存目前在 worker 中是占位函数，没有写入 API 数据库。
-- 没有监控频率、去重、风险升级判断、通知失败重试。
+- Profile 页可提交咨询并列出历史（`consultations` 表）
+- 未实现：顾问分配、咨询状态流转、跟进记录、支付
+- "联系顾问"按钮仍只跳 profile tab，没有预填查询对象
 
-### 报告详情与商业转化
+### 监控能力进阶
 
-- 报告解锁接口已记录 lead、更新 `reports.unlocked` 字段，并带报告、任务、工具和输入来源归因。
-- `fullReportUrl` 指向的 `GET /api/reports/:reportId` 已实现，可返回查询来源、报告预览、证据、建议动作和解锁状态。
-- 完整报告详情目前复用查询时落库的 preview、证据、建议动作和 extra 数据，还没有独立的深度报告章节模型。
-- 静态 demo 和小程序正式报告页均已能在解锁后展示完整报告。
-- 未实现支付、顾问分配、咨询预约或聊天承接。
-- 独立 `POST /api/leads` 创建的线索仍没有业务来源归因。
+- 暂停 / 恢复 / 删除 已接（PATCH + DELETE）
+- BullMQ 默认重试已配：`attempts: 3` + 指数退避
+- 未做：per-monitor 自定义频率（全局 `MONITOR_TICK_INTERVAL_MS`）
+- 未做：通知投递失败后的补偿队列
 
-### 小程序体验
+### 小程序 UI 打磨
 
-- UI 仍是基础组件堆叠，缺少正式样式、加载态、错误态、空态和重试入口。
-- API 地址硬编码为 `http://127.0.0.1:3000`，没有区分开发、测试、生产环境。
-- 查询失败、接口超时、结果缓存失效时的用户反馈不足。
-- 结果页的更新时间当前固定为 `刚刚更新`，不是后端真实时间。
-- 案件进展输入没有针对案件号和品牌词的差异化确认。
-- 联系顾问只是跳转我的页，没有真实表单或服务流。
+- 结果页"更新时间"已用真实 `sourceFetchedAt`
+- 结果页 + 报告解锁页都有 fixture 徽章
+- 未做：正式视觉设计（当前仍是基础组件堆叠）
+- 未做：首页 submit loading/error 反馈（`pages/home/index.tsx:22` 同步调用没 UI 状态）
 
-### 安全与生产化
+### 生产化
 
-- API 没有鉴权、用户身份、访问控制。
-- 接口请求体校验较弱，部分接口允许空联系方式或无效数据。
-- 没有速率限制、审计日志、错误监控。
-- SQLite 适合当前原型，不适合多实例生产部署。
-- `services/api/data/query-tasks.sqlite` 是本地运行数据，不应进入版本库。
-
-## 建议优化顺序
-
-### P0：先补齐可信查询闭环
-
-1. 明确 `Real*Connector` 命名和真实程度：如果仍是样本数据，改名为 `Fixture*Connector` 或 `Seeded*Connector`。
-2. 查询结果增加 `createdAt`、`sourceLinks`、`sourceFetchedAt`，让结果可解释、可复核。
-3. 为 `/api/query-tasks` 增加严格 schema 校验，避免无效工具、空输入、非法联系方式进入系统。
-4. 小程序补齐查询 loading、失败提示和重试。
-
-用户影响：用户能判断结果是否可信，失败时知道下一步，而不是看到静默失败或样例感结果。
-
-### P1：打通报告解锁和监控转化
-
-1. 已实现 `GET /api/reports/:reportId`。
-2. 已实现解锁报告时更新 `reports.unlocked`，并记录 lead 来源。
-3. 结果页 `加入监控` 直接创建监控任务，而不是只跳转监控 tab。`done`
-4. 监控页读取真实监控列表。`done`
-5. 监控命中后写入站内消息，并按用户联系方式通知。
-
-用户影响：一次查询可以自然进入持续监控，用户不会觉得按钮只是摆设。
-
-### P2：重构异步任务边界
-
-1. `POST /api/query-tasks` 只创建任务并返回 `queued`。
-2. jobs 消费查询任务，执行工具服务，写回报告和状态。
-3. 小程序轮询或订阅任务状态。
-4. 增加任务失败状态和用户可理解的失败原因。
-
-用户影响：后续接真实数据源时不会因为慢查询卡住页面，查询过程更稳定。
-
-### P3：生产化与增长承接
-
-1. 引入用户身份和授权策略。
-2. 用正式数据库替换单文件 SQLite，或至少封装迁移和备份策略。
-3. 增加顾问承接表单、分配状态和跟进记录。
-4. 增加关键指标埋点：查询提交、结果查看、报告解锁、监控创建、顾问联系。
-
-用户影响：从工具原型升级为可运营服务，能持续跟进风险和转化。
+- SQLite 适合原型；多实例生产部署需要 PostgreSQL / MySQL + 版本化 migration 工具
+- CI 有 lint/test/后端 build；miniprogram build / 部署流水线仍未接
+- `docker-compose.yml` 只有 redis + mailpit；没有 api/jobs 容器编排
 
 ## 当前任务状态
 
 | 任务 | 状态 | 说明 |
 | --- | --- | --- |
-| 初始化 monorepo | done | workspace、脚本、基础配置已完成 |
-| 共享核心包 | done | 输入归一化、风险分级、报告预览已完成 |
-| API 外壳和 SQLite | done | health、查询任务、SQLite schema 已完成 |
-| 数据源连接器和工具服务 | partial | 服务接口已完成，但真实外部数据源未接入 |
-| 队列、监控和通知处理 | partial | BullMQ 和处理器骨架已完成，真实调度和落库未打通 |
-| 报告、线索、监控、消息接口 | partial | 报告详情、解锁状态、报告来源归因、监控创建和监控列表已完成；监控通知落库和顾问承接仍未完整闭环 |
-| 小程序页面骨架 | done | 主要页面和 tab 已完成 |
-| 结果页、报告页和完整链路 | partial | 查询、结果、报告解锁、报告详情、监控创建和监控列表已打通；监控通知和顾问承接仍未完整闭环 |
+| 初始化 monorepo | done | 含 `packages/tools`、`packages/queue` |
+| 共享核心包 | done | 输入归一化、风险分级、报告预览 |
+| 工具执行包（tools） | done | fixture 连接器 + runQueryTool + runMonitorCheck |
+| 队列包（queue） | done | QueueClient 接口 + BullMQ 封装 |
+| API 外壳和 SQLite | done | 含 schema 迁移（ensureColumn 幂等） |
+| 异步查询分发 | done | 入队 + worker + 内部回写 + 任务失败路径 |
+| 请求校验 | partial | monitors/leads/messages/consultations/monitor-PATCH 已用 JSON Schema；query-tasks / unlock 仍保留业务错误码 |
+| 监控通知闭环 | done | 真实收件人、Mailpit SMTP、站内消息落库 |
+| 监控自动触发 | done | BullMQ repeatable + monitor-tick processor + `attempts: 3` 重试 |
+| 监控生命周期 | done | PATCH status + DELETE + 按 user 隔离 |
+| 小程序结果页 | done | loading / completed / failed 三态 + 轮询 + fixture 徽章 + 真实 updatedAt |
+| 小程序消息页 | done | 三态 + 完整列表渲染 |
+| 小程序环境切换 | done | `TARO_APP_API_BASE` env 注入 |
+| 报告详情页 | done | 含 dataSource 徽章 + sourceFetchedAt |
+| 真实数据源 - CourtListener | done | env token 启用；mock-fetch 测试 |
+| 真实数据源 - USPTO | partial | 可插拔 URL 模板已就绪；未对真实服务实测 |
+| 真实数据源 - Amazon | todo | 仍为 fixture（需付费 API） |
+| TTL 缓存 | done | `TtlCache` + `sourceFetchedAt` 落库 |
+| 内部端点鉴权 | done | 共享密钥；所有 `/api/internal/*`（含 raw）均受保护 |
+| 外部身份识别 | done | 匿名 token + request.user + user_id 写入 |
+| 外部授权过滤 | done | GET 按 user_id 过滤；匿名只见 user_id IS NULL |
+| 速率限制 | done | `@fastify/rate-limit`，env `RATE_LIMIT_REDIS_URL` 切 Redis store |
+| 审计日志 | done | JSON 行结构化；注入式便于测试 |
+| 顾问承接 UI | done | 表单 + 历史列表 + 按 user 隔离；advisor 分配后端未实现 |
+| WeChat openid 鉴权 | todo | 当前只有匿名 token |
+| 生产化部署 | todo | DB 迁移、miniprogram CI、部署流水线、错误监控 |
 
 状态定义：
+- `done`：代码 + 测试已完成，当前范围可用
+- `partial`：主路径能跑，仍有明确缺口
+- `todo`：尚未开始
 
-- `done`：代码、测试和文档均已完成，用户可按当前范围使用。
-- `partial`：主路径或接口已存在，但仍有占位、mock、硬编码或缺少关键闭环。
-- `todo`：尚未开始。
-- `blocked`：因外部依赖、权限或关键决策无法继续。
+## 建议下一步
 
-## 后续维护规则
+按价值/成本排序：
 
-- 每完成一个开发任务，必须同步更新本文件的 `当前任务状态`。
-- 如果任务来自某个 plan，也必须更新对应 `docs/superpowers/plans/*-plan.md` 的复选框或状态说明。
-- 如果能力范围、目录约定或验证命令发生变化，先更新 `AGENTS.md` 或相关设计文档，再更新代码实践。
-- 状态更新必须区分 `done` 和 `partial`，不能把 mock、硬编码或占位能力记为完成。
+1. **鉴权 MVP**：WeChat openid 流或 session cookie，先把外部 + 内部端点分开，最小可用即可
+2. **报告详情页 fixture 徽章**：小而快，UX 一致性
+3. **监控暂停/删除**：闭合监控生命周期管理
+4. **真实数据源**：最难也最重要；建议先只接一个（CourtListener 公开免费）验证流程
+5. **Profile 页**：先放占位说明+表单，无需真顾问后端
+6. **CI**：GitHub Actions 跑 lint/test/build 即可
 
-## 最近验证记录
+## 最近变更日志
 
-验证时间：2026-04-21
+### 2026-04-21 会话（7 轮迭代）
 
-| 命令 | 结果 | 说明 |
-| --- | --- | --- |
-| `PATH=/Users/xiaoan/.nvm/versions/node/v22.22.1/bin:$PATH pnpm lint` | pass | Biome 检查 164 个文件，无错误 |
-| `PATH=/Users/xiaoan/.nvm/versions/node/v22.22.1/bin:$PATH pnpm test` | pass | 16 个测试文件、39 个测试全部通过 |
-| `PATH=/Users/xiaoan/.nvm/versions/node/v22.22.1/bin:$PATH pnpm build` | pass | workspace 构建通过；Taro 构建仍有 `punycode` deprecation warning |
+1. **监控通知闭环** — `monitor-processor` 读真实 `notifyEmail/notifyPhone`；`POST /api/messages` 落库；email provider 接 Mailpit（nodemailer）
+2. **异步查询分发** — 抽出 `packages/tools` + `packages/queue`；`POST /api/query-tasks` 入队化；新增 `POST /api/internal/query-tasks/:id/result`；`query-task-processor` 真实现；前端 polling + loading/error/retry；fixture 透明化（`Real*` → `Fixture*`、`dataSource` 字段、前端徽章）
+3. **监控自动触发** — `packages/tools` 新增 `runMonitorCheck` + `pickMonitorTool`；`POST /api/internal/monitors/:id/check`；`monitors` 表加 last_preview 字段；SQLite 脱离 git
+4. **BullMQ 定时任务** — `monitor-tick-processor` + `upsertJobScheduler`（默认 5 分钟）
+5. **前端 env 化 + API 请求校验** — `TARO_APP_API_BASE`；monitors/leads/messages 路由加 Fastify JSON Schema
+6. **消息中心端到端** — `MessageListScreen` 组件 + MessagesPage 三态 + `listMessages` 类型化
+7. **文档同步** — README 重写、AGENTS 目录约定扩充、本状态盘点大幅更新、实施记录归档
+8. **内部端点鉴权 MVP** — `INTERNAL_API_TOKEN` 共享密钥、preHandler 校验 `x-internal-token`、worker 自动携带；dev 默认放行 + warn，生产必须设置
+9. **外部身份识别 MVP** — `users` 表 + `POST /api/auth/anonymous`；preHandler 解析 Bearer token 挂 `request.user`；query_tasks / monitors / leads 加 `user_id` 列（nullable）并在创建时写入；前端 `lib/auth.ts` 启动 `ensureUserToken()` + 自动注入 Authorization 头。本轮不做按 user 过滤。
+10. **外部授权过滤** — `GET` 端点按 `user_id` 过滤；匿名请求只见 `user_id IS NULL` 记录；messages 通过 JOIN `monitors.user_id` 过滤；新增 `tests/api/auth-isolation.test.ts`（5 case）证明跨用户隔离。
+11. **CI** — `.github/workflows/ci.yml`：pnpm 10.10 + Node 22 + 缓存；`--frozen-lockfile` 保证可复现，故 `pnpm-lock.yaml` 从 `.gitignore` 移除并纳入版本库；跑 lint + test + 后端 build（miniprogram build 因 Taro 工具链重暂不纳入）。
+12. **第一个 live 数据源** — `LiveCourtListenerConnector` 调 v4 REST API（search + docket-entries），fetch 可注入；`createDefaultToolExecutor` 按 `COURTLISTENER_API_TOKEN` 决定 live / fixture；`DataSource` 增加 `"mixed"` 状态；`mergeDataSources` 工具函数；Amazon/USPTO 暂时维持 fixture。
+13. **监控暂停/删除** — `PATCH /api/monitors/:id`（schema 校验 status 枚举）+ `DELETE /api/monitors/:id`；按 user_id 隔离 404；前端监控列表加"暂停/恢复/删除"按钮并刷新列表。
+14. **报告详情 fixture 徽章** — reports route 返回 `dataSource`；前端解锁后展示"演示数据"或"部分来源为演示数据"徽章，与结果页保持一致。
+15. **Profile 顾问承接** — `consultations` 表 + `POST /api/consultations`（姓名必填、手机号 pattern、备注 ≤1000 字符）+ `GET /api/consultations`（按 user_id 过滤）；Profile 页变为真正的表单 + 咨询记录列表。
+16. **速率限制 + 审计日志** — `@fastify/rate-limit`（默认 60/min，按 user_id 或 IP 分桶；env `RATE_LIMIT_MAX`/`RATE_LIMIT_WINDOW`）+ 注入式 audit hook（记录 method/url/status/userId/durationMs）；生产默认 JSON 行结构化日志，tests 可传 spy 或 null 禁用。
+17. **第二个 live 数据源（USPTO 可插拔）** — `LiveUsptoTrademarkConnector` 走 URL 模板（`{term}` / `{termEncoded}` 占位）+ 可选 `Authorization` 头；env `USPTO_SEARCH_URL_TEMPLATE` / `USPTO_AUTH_HEADER` 启用；响应接受 `{results}`, `{marks}`, `{data}` 或裸数组；同上按 env 切换。
+18. **TTL 缓存 + sourceFetchedAt** — `TtlCache` 类（默认 5 分钟）；executor 按 (tool, kind, normalizedValue) 键缓存结果，命中跳过外部调用；`ToolResult.sourceFetchedAt` 字段落到 `reports.source_fetched_at` 列；前端 updatedAt 从假字符串"刚刚更新"改为真实本地时间。
 
-启动状态：
+测试增长：39 → 139（+100）。代码文件数：91 → 129（+38）。
 
-- API：`http://127.0.0.1:3000/health` 返回 `{"ok":true}`。
-- Redis：Docker Compose `redis` 服务已运行，映射端口 `6379`。
-- Mailpit：Docker Compose `mailpit` 服务已运行，Web UI 端口 `8025`。
-- jobs worker：通过 `screen` 会话 `xiaochengxu-jobs` 后台运行。
-- 小程序 weapp watch：通过 `screen` 会话 `xiaochengxu-miniprogram` 后台运行。
+### 19 轮：安全漏洞修复 + 生产化小抓
 
-本次修复：
+- **raw 端点鉴权**：`GET /api/query-tasks/:id/raw` 迁移到 `/api/internal/query-tasks/:id/raw`，受 `INTERNAL_API_TOKEN` 保护；worker 与测试 helpers 同步更新 URL；新增 auth 测试用例覆盖。
+- **速率限制 Redis store**：`BuildAppOptions.rateLimit` 增加 `redis?: Redis`；server 读 `RATE_LIMIT_REDIS_URL` 按需启用，多 API 实例共享计数器；`@xiaochengxu/queue` 重新导出 `Redis` 类型避免 api 包直依赖 ioredis。
+- **BullMQ 重试**：`packages/queue/src/queues.ts` 导出 `DEFAULT_JOB_OPTIONS`（`attempts: 3` + 指数退避 5s，`removeOnComplete/removeOnFail` 保留窗口），query / notification / monitor 三条队列统一应用。
 
-- 新增 `services/jobs/src/redis-options.ts`，将 BullMQ Redis 连接的 `maxRetriesPerRequest` 固定为 `null`。
-- 更新 `services/jobs/src/queues.ts` 使用统一 Redis 连接配置。
-- 新增 `tests/jobs/redis-options.test.ts`，防止后续改动破坏 BullMQ worker 必需配置。
-- 小程序正式报告页解锁后会拉取并展示完整报告详情。
-- 新增 `miniprogram/src/lib/report-detail-view-model.ts`，将报告详情接口返回值转换为页面展示模型。
-- 更新 `miniprogram/src/components/report-unlock-screen.test.tsx`，覆盖解锁后完整报告渲染。
-- 结果页 `加入监控` 会调用 `POST /api/monitors` 创建监控记录，然后进入监控页。
-- 新增 `miniprogram/src/pages/result/index.test.tsx`，覆盖结果页创建监控的请求 payload。
-- 新增 `GET /api/monitors`，返回已创建监控列表。
-- 监控页改为读取 `/api/monitors`，不再渲染硬编码样例。
-- 新增 `miniprogram/src/pages/monitor/index.test.tsx`，覆盖监控页接口读取。
+测试增长：39 → 140（+101）。代码文件数：91 → 129（+38）。

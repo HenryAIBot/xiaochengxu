@@ -8,6 +8,9 @@ coverage/
 *.tmp
 tmp/
 .swc/
-pnpm-lock.yaml
 package-lock.json
 .idea/
+services/api/data/*.sqlite
+services/api/data/*.sqlite-journal
+services/api/data/*.sqlite-shm
+services/api/data/*.sqlite-wal

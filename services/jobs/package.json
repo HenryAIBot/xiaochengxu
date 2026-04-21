@@ -8,7 +8,14 @@
     "lint": "biome check src"
   },
   "dependencies": {
+    "@xiaochengxu/core": "workspace:*",
+    "@xiaochengxu/queue": "workspace:*",
+    "@xiaochengxu/tools": "workspace:*",
     "bullmq": "^5.41.5",
-    "ioredis": "^5.5.0"
+    "ioredis": "^5.5.0",
+    "nodemailer": "^8.0.5"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.0"
   }
 }

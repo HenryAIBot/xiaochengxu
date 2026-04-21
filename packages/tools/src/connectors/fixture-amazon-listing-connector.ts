@@ -507,7 +507,7 @@ function generateGenericListing(asin: string): ListingData {
   };
 }
 
-export class RealAmazonListingConnector {
+export class FixtureAmazonListingConnector {
   async getListingHtml(asin: string) {
     const listing = findListing(asin) ?? generateGenericListing(asin);
     // 构建类似 Amazon 页面的 HTML 结构，提取 brand 信息

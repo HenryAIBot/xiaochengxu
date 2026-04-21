@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
+import {
+  CaseProgressService,
+  InfringementCheckService,
+  StorefrontCandidateService,
+  TroAlertService,
+} from "@xiaochengxu/tools";
 import { describe, expect, it } from "vitest";
-import { CaseProgressService } from "../../services/api/src/services/case-progress-service.js";
-import { InfringementCheckService } from "../../services/api/src/services/infringement-check-service.js";
-import { StorefrontCandidateService } from "../../services/api/src/services/storefront-candidate-service.js";
-import { TroAlertService } from "../../services/api/src/services/tro-alert-service.js";
 
 describe("tool services", () => {
   it("builds a suspected_high tro alert summary from court hits", async () => {

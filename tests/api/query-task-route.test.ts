@@ -1,7 +1,56 @@
-import { afterEach, describe, expect, it } from "vitest";
+import type { QueueClient } from "@xiaochengxu/queue";
+import { createDefaultToolExecutor } from "@xiaochengxu/tools";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp, createInMemoryDb } from "../../services/api/src/app.js";
+import { runQueryTaskProcessor } from "../../services/jobs/src/processors/query-task-processor.js";
 
-describe("POST /api/query-tasks", () => {
+function makeRecordingQueue(): { client: QueueClient; taskIds: string[] } {
+  const taskIds: string[] = [];
+  return {
+    taskIds,
+    client: {
+      async enqueueQuery({ taskId }) {
+        taskIds.push(taskId);
+      },
+      async enqueueNotification() {},
+      async close() {},
+    },
+  };
+}
+
+async function runWorkerFor(app: ReturnType<typeof buildApp>, taskId: string) {
+  const runTool = createDefaultToolExecutor();
+  await runQueryTaskProcessor(
+    { taskId },
+    {
+      loadTask: async (id) => {
+        const r = await app.inject({
+          method: "GET",
+          url: `/api/internal/query-tasks/${id}/raw`,
+        });
+        return r.json();
+      },
+      runTool: (task) =>
+        runTool({ tool: task.tool, normalizedInput: task.normalizedInput }),
+      postResult: async (id, result) => {
+        await app.inject({
+          method: "POST",
+          url: `/api/internal/query-tasks/${id}/result`,
+          payload: { report: result },
+        });
+      },
+      postFailure: async (id, error) => {
+        await app.inject({
+          method: "POST",
+          url: `/api/internal/query-tasks/${id}/result`,
+          payload: { error },
+        });
+      },
+    },
+  );
+}
+
+describe("POST /api/query-tasks (async)", () => {
   let db = createInMemoryDb();
   let app: ReturnType<typeof buildApp> | null = null;
 
@@ -10,13 +59,13 @@ describe("POST /api/query-tasks", () => {
       await app.close();
       app = null;
     }
-
     db.close();
     db = createInMemoryDb();
   });
 
-  it("stores a normalized completed task and creates a report preview", async () => {
-    app = buildApp({ db });
+  it("enqueues a task and returns 202 with pending status", async () => {
+    const { client, taskIds } = makeRecordingQueue();
+    app = buildApp({ db, queue: client });
 
     const response = await app.inject({
       method: "POST",
@@ -27,56 +76,19 @@ describe("POST /api/query-tasks", () => {
       },
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      status: "completed",
-      normalizedInput: {
-        kind: "asin",
-        normalizedValue: "B0C1234567",
-      },
-      level: "watch",
-      levelLabel: "需关注",
+    expect(response.statusCode).toBe(202);
+    const body = response.json();
+    expect(body).toMatchObject({
+      status: "pending",
+      normalizedInput: { kind: "asin", normalizedValue: "B0C1234567" },
     });
-    expect(response.json().reportId).toEqual(expect.any(String));
-    expect(response.json().summary).toContain("B0C1234567");
+    expect(body.taskId).toEqual(expect.any(String));
+    expect(taskIds).toEqual([body.taskId]);
 
     const record = db
-      .prepare(
-        `SELECT tool, input_kind AS inputKind, raw_input AS rawInput, normalized_input AS normalizedInput, status
-         FROM query_tasks`,
-      )
-      .get() as {
-      tool: string;
-      inputKind: string;
-      rawInput: string;
-      normalizedInput: string;
-      status: string;
-    };
-
-    expect(record).toMatchObject({
-      tool: "tro_alert",
-      inputKind: "asin",
-      rawInput: "https://www.amazon.com/dp/B0C1234567",
-      normalizedInput: "B0C1234567",
-      status: "completed",
-    });
-
-    const report = db
-      .prepare(
-        "SELECT task_id AS taskId, level, summary, unlocked FROM reports",
-      )
-      .get() as {
-      taskId: string;
-      level: string;
-      summary: string;
-      unlocked: number;
-    };
-
-    expect(report).toMatchObject({
-      level: "watch",
-      unlocked: 0,
-    });
-    expect(report.taskId).toEqual(response.json().id);
+      .prepare("SELECT status FROM query_tasks WHERE id = ?")
+      .get(body.taskId) as { status: string };
+    expect(record.status).toBe("queued");
   });
 
   it("rejects blank input with a BLANK_INPUT 400 response", async () => {
@@ -85,10 +97,7 @@ describe("POST /api/query-tasks", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/query-tasks",
-      payload: {
-        tool: "case_progress",
-        input: "   ",
-      },
+      payload: { tool: "case_progress", input: "   " },
     });
 
     expect(response.statusCode).toBe(400);
@@ -98,31 +107,94 @@ describe("POST /api/query-tasks", () => {
     });
   });
 
-  it("checks brand terms directly for infringement risk", async () => {
-    app = buildApp({ db });
+  it("completes the task once the worker processes it", async () => {
+    const { client } = makeRecordingQueue();
+    app = buildApp({ db, queue: client });
 
-    const response = await app.inject({
+    const created = await app.inject({
       method: "POST",
       url: "/api/query-tasks",
-      payload: {
-        tool: "infringement_check",
-        input: "apple",
-      },
+      payload: { tool: "infringement_check", input: "apple" },
     });
+    const { taskId } = created.json();
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      status: "completed",
+    const pending = await app.inject({
+      method: "GET",
+      url: `/api/query-tasks/${taskId}`,
+    });
+    expect(pending.json().status).toBe("queued");
+
+    await runWorkerFor(app, taskId);
+
+    const completed = await app.inject({
+      method: "GET",
+      url: `/api/query-tasks/${taskId}`,
+    });
+    expect(completed.statusCode).toBe(200);
+    const body = completed.json();
+    expect(body.status).toBe("completed");
+    expect(body.reportId).toEqual(expect.any(String));
+    expect(body.result).toMatchObject({
       level: "suspected_high",
       levelLabel: "疑似高风险",
-      normalizedInput: {
-        kind: "brand",
-        normalizedValue: "apple",
-      },
+      dataSource: "fixture",
     });
-    expect(response.json().summary).toContain(
+    expect(body.result.summary).toContain(
       "权利人 Apple Inc. 名下有效商标：APPLE、IPHONE、AIRPODS",
     );
-    expect(response.json().evidence).toHaveLength(1);
+  });
+
+  it("marks a task as failed when the tool throws", async () => {
+    const { client } = makeRecordingQueue();
+    app = buildApp({ db, queue: client });
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/query-tasks",
+      payload: { tool: "tro_alert", input: "nike" },
+    });
+    const { taskId } = created.json();
+
+    await runQueryTaskProcessor(
+      { taskId },
+      {
+        loadTask: async (id) => {
+          const r = await app.inject({
+            method: "GET",
+            url: `/api/internal/query-tasks/${id}/raw`,
+          });
+          return r.json();
+        },
+        runTool: vi
+          .fn()
+          .mockRejectedValue(new Error("CourtListener 服务暂时不可用")),
+        postResult: async () => {},
+        postFailure: async (id, error) => {
+          await app.inject({
+            method: "POST",
+            url: `/api/internal/query-tasks/${id}/result`,
+            payload: { error },
+          });
+        },
+      },
+    );
+
+    const final = await app.inject({
+      method: "GET",
+      url: `/api/query-tasks/${taskId}`,
+    });
+    expect(final.json()).toMatchObject({
+      status: "failed",
+      failureReason: "CourtListener 服务暂时不可用",
+    });
+  });
+
+  it("returns 404 for an unknown task id", async () => {
+    app = buildApp({ db });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/query-tasks/does-not-exist",
+    });
+    expect(res.statusCode).toBe(404);
   });
 });

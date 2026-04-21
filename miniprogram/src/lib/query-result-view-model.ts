@@ -18,6 +18,8 @@ export interface QueryTaskResult {
     reason: string;
   }>;
   recommendedActions: string[];
+  dataSource?: string;
+  sourceFetchedAt?: string | null;
 }
 
 export interface ResultViewModel {
@@ -39,6 +41,54 @@ export interface ResultViewModel {
     description: string;
   }>;
   actions: string[];
+  dataSource?: string;
+}
+
+export interface CompletedTaskStatus {
+  taskId: string;
+  status: "completed";
+  tool: string;
+  normalizedInput: { kind: string; normalizedValue: string };
+  reportId?: string;
+  result?: {
+    level: string;
+    levelLabel: string;
+    summary: string;
+    evidence: Array<{ source: string; level: string; reason: string }>;
+    recommendedActions: string[];
+    dataSource?: string;
+    sourceFetchedAt?: string | null;
+  };
+}
+
+export function flattenCompletedTask(
+  status: CompletedTaskStatus,
+): QueryTaskResult {
+  if (!status.reportId || !status.result) {
+    throw new Error("flattenCompletedTask requires reportId and result");
+  }
+  return {
+    id: status.taskId,
+    reportId: status.reportId,
+    status: "completed",
+    tool: status.tool as QueryTool,
+    normalizedInput: status.normalizedInput,
+    level: status.result.level,
+    levelLabel: status.result.levelLabel,
+    summary: status.result.summary,
+    evidence: status.result.evidence,
+    recommendedActions: status.result.recommendedActions,
+    dataSource: status.result.dataSource,
+    sourceFetchedAt: status.result.sourceFetchedAt,
+  };
+}
+
+function formatUpdatedAt(iso: string | null | undefined): string {
+  if (!iso) return "刚刚更新";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "刚刚更新";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 const TOOL_LABELS: Record<QueryTool, string> = {
@@ -91,7 +141,7 @@ export function toResultViewModel(result: QueryTaskResult): ResultViewModel {
     toolName: TOOL_LABELS[tool],
     level: LEVEL_LABELS[result.level] ?? result.levelLabel,
     summary: result.summary,
-    updatedAt: "刚刚更新",
+    updatedAt: formatUpdatedAt(result.sourceFetchedAt),
     evidence: result.evidence.slice(0, 3).map((item, index) => ({
       id: `${item.source}-${index}`,
       title: SOURCE_TITLES[item.source] ?? "风险信号",
@@ -103,5 +153,6 @@ export function toResultViewModel(result: QueryTaskResult): ResultViewModel {
       result.recommendedActions.length > 0
         ? result.recommendedActions
         : ["继续观察"],
+    dataSource: result.dataSource,
   };
 }

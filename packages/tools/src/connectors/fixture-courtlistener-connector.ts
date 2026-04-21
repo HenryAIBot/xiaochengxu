@@ -235,7 +235,7 @@ function findCases(target: string): CaseRecord[] {
   ];
 }
 
-export class RealCourtListenerConnector implements CourtListenerPort {
+export class FixtureCourtListenerConnector implements CourtListenerPort {
   async search(target: string) {
     const cases = findCases(target);
     return {

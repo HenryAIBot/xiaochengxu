@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    name: lint + test + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build backend packages
+        # Skip miniprogram build (Taro requires extra tooling & native binaries
+        # that slow CI significantly). Backend packages guarantee TS compiles.
+        run: >-
+          pnpm
+          --filter @xiaochengxu/core
+          --filter @xiaochengxu/queue
+          --filter @xiaochengxu/tools
+          --filter @xiaochengxu/api
+          --filter @xiaochengxu/jobs
+          -r build

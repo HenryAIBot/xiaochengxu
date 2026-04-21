@@ -7,6 +7,7 @@ export function ResultScreen({
   updatedAt,
   evidence,
   actions,
+  dataSource,
   onUnlockReport,
   onStartMonitor,
   onContactAdvisor,
@@ -23,12 +24,19 @@ export function ResultScreen({
     description: string;
   }>;
   actions: string[];
+  dataSource?: string;
   onUnlockReport(): void;
   onStartMonitor(): void;
   onContactAdvisor(): void;
 }) {
   return (
     <View>
+      {dataSource === "fixture" ? (
+        <View>
+          <Text>演示数据（非真实 API）</Text>
+        </View>
+      ) : null}
+
       <View>
         <Text>{toolName}结果</Text>
         <Text>{level}</Text>

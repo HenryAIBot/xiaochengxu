@@ -7,6 +7,12 @@ export default defineConfig({
       "@xiaochengxu/core": fileURLToPath(
         new URL("./packages/core/src/index.ts", import.meta.url),
       ),
+      "@xiaochengxu/tools": fileURLToPath(
+        new URL("./packages/tools/src/index.ts", import.meta.url),
+      ),
+      "@xiaochengxu/queue": fileURLToPath(
+        new URL("./packages/queue/src/index.ts", import.meta.url),
+      ),
     },
   },
   test: {

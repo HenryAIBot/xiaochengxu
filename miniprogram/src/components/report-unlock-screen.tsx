@@ -89,6 +89,16 @@ export function ReportUnlockScreen({
 function FullReportContent({ report }: { report: FullReportViewModel }) {
   return (
     <View>
+      {report.dataSource === "fixture" ? (
+        <View>
+          <Text>演示数据（非真实 API）</Text>
+        </View>
+      ) : null}
+      {report.dataSource === "mixed" ? (
+        <View>
+          <Text>部分来源为演示数据</Text>
+        </View>
+      ) : null}
       <Text>完整报告</Text>
       <Text>查询对象：{report.queryInput}</Text>
       <Text>检测类型：{report.toolName}</Text>
