@@ -22,11 +22,17 @@ function readInputValue(event: {
 
 export function ReportUnlockScreen({
   onUnlock,
+  onActionTap,
+  onContactAdvisor,
+  onStartMonitor,
 }: {
   onUnlock(input: {
     email?: string;
     phone?: string;
   }): undefined | ReportDetail | Promise<undefined | ReportDetail>;
+  onActionTap?: (action: string) => void;
+  onContactAdvisor?: () => void;
+  onStartMonitor?: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -110,12 +116,29 @@ export function ReportUnlockScreen({
         </Button>
       </View>
 
-      {fullReport ? <FullReportContent report={fullReport} /> : null}
+      {fullReport ? (
+        <FullReportContent
+          report={fullReport}
+          onActionTap={onActionTap}
+          onContactAdvisor={onContactAdvisor}
+          onStartMonitor={onStartMonitor}
+        />
+      ) : null}
     </View>
   );
 }
 
-function FullReportContent({ report }: { report: FullReportViewModel }) {
+function FullReportContent({
+  report,
+  onActionTap,
+  onContactAdvisor,
+  onStartMonitor,
+}: {
+  report: FullReportViewModel;
+  onActionTap?: (action: string) => void;
+  onContactAdvisor?: () => void;
+  onStartMonitor?: () => void;
+}) {
   const levelClass = LEVEL_BADGE[report.level] ?? "badge";
   return (
     <View className="card">
@@ -155,11 +178,39 @@ function FullReportContent({ report }: { report: FullReportViewModel }) {
         <Text className="section__title">处理清单</Text>
         <View className="action-list">
           {report.actions.map((action) => (
-            <View key={action} className="action-list__item">
+            <View
+              key={action}
+              className={
+                onActionTap
+                  ? "action-list__item action-list__item--tappable"
+                  : "action-list__item"
+              }
+              onClick={onActionTap ? () => onActionTap(action) : undefined}
+            >
               <Text>{action}</Text>
             </View>
           ))}
         </View>
+        {onContactAdvisor || onStartMonitor ? (
+          <View className="list-item__actions" style={{ marginTop: "12px" }}>
+            {onContactAdvisor ? (
+              <Button
+                className="btn btn--primary btn--block"
+                onClick={onContactAdvisor}
+              >
+                立即联系顾问
+              </Button>
+            ) : null}
+            {onStartMonitor ? (
+              <Button
+                className="btn btn--ghost btn--block"
+                onClick={onStartMonitor}
+              >
+                加入持续监控
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     </View>
   );

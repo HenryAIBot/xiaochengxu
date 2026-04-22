@@ -3,6 +3,18 @@ import Taro from "@tarojs/taro";
 import { ReportUnlockScreen } from "../../components/report-unlock-screen";
 import { getReport, unlockReport } from "../../lib/api";
 
+function routeAction(action: string) {
+  if (/顾问|联系|咨询|申诉|和解/.test(action)) {
+    Taro.switchTab({ url: "/pages/profile/index" });
+    return;
+  }
+  if (/监控|持续观察|继续观察|关注/.test(action)) {
+    Taro.switchTab({ url: "/pages/monitor/index" });
+    return;
+  }
+  Taro.showToast({ title: action, icon: "none", duration: 3000 });
+}
+
 export default function ReportPage() {
   const reportId =
     Taro.getCurrentInstance().router?.params?.id ??
@@ -20,6 +32,9 @@ export default function ReportPage() {
           await unlockReport(reportId, payload);
           return getReport(reportId);
         }}
+        onActionTap={routeAction}
+        onContactAdvisor={() => Taro.switchTab({ url: "/pages/profile/index" })}
+        onStartMonitor={() => Taro.switchTab({ url: "/pages/monitor/index" })}
       />
     </View>
   );

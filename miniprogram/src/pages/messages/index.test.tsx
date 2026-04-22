@@ -4,6 +4,7 @@ import MessagesPage from "./index";
 
 const taro = vi.hoisted(() => ({
   request: vi.fn(),
+  getStorageSync: vi.fn(() => "test-token"),
 }));
 
 vi.mock("@tarojs/taro", () => ({

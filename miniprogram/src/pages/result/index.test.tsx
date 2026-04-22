@@ -16,6 +16,7 @@ const taro = vi.hoisted(() => ({
   navigateBack: vi.fn(),
   request: vi.fn(),
   switchTab: vi.fn(),
+  showToast: vi.fn(),
 }));
 
 vi.mock("@tarojs/taro", () => ({
@@ -48,6 +49,11 @@ describe("ResultPage", () => {
     taro.getCurrentInstance.mockReturnValue({
       router: { params: { id: "task-1" } },
     });
+    // Pre-populate a fake token so buildAuthHeader doesn't try to fetch
+    // one from the API and consume the test's request mocks.
+    taro.getStorageSync.mockImplementation((key: string) =>
+      key === "userToken" ? "test-token" : undefined,
+    );
     taro.request.mockResolvedValue({
       data: { id: "monitor-1", status: "active" },
     });
@@ -85,7 +91,9 @@ describe("ResultPage", () => {
   });
 
   it("shows loading then renders the completed result after polling", async () => {
-    taro.getStorageSync.mockReturnValue(undefined);
+    taro.getStorageSync.mockImplementation((key: string) =>
+      key === "userToken" ? "test-token" : undefined,
+    );
     taro.request.mockReset();
     taro.request.mockResolvedValue({
       data: {
@@ -120,7 +128,9 @@ describe("ResultPage", () => {
   });
 
   it("shows a failed state when the polled task failed and allows retry", async () => {
-    taro.getStorageSync.mockReturnValue(undefined);
+    taro.getStorageSync.mockImplementation((key: string) =>
+      key === "userToken" ? "test-token" : undefined,
+    );
     taro.request.mockReset();
     taro.request.mockResolvedValueOnce({
       data: {

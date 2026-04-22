@@ -55,14 +55,21 @@ export default function ProfilePage() {
     // "(86) 138-0013-8000" still pass validation.
     const plusPrefix = trimmedPhone.startsWith("+") ? "+" : "";
     const normalizedPhone = plusPrefix + trimmedPhone.replace(/\D/g, "");
-    if (!trimmedName || !normalizedPhone || normalizedPhone === "+") {
-      setMessage("请填写姓名和手机号");
+    if (!trimmedName) {
+      setMessage("请填写姓名");
+      setMessageTone("error");
+      return;
+    }
+    if (!normalizedPhone || normalizedPhone === "+") {
+      setMessage("请填写手机号");
       setMessageTone("error");
       return;
     }
     const phonePattern = /^\+?\d{7,15}$/;
     if (!phonePattern.test(normalizedPhone)) {
-      setMessage("手机号格式不正确（7-15 位数字，可带 +）");
+      setMessage(
+        `手机号格式不正确：${normalizedPhone}（应为 7-15 位数字，可带 +）`,
+      );
       setMessageTone("error");
       return;
     }
@@ -80,8 +87,10 @@ export default function ProfilePage() {
       setPhone("");
       setNote("");
       await load();
-    } catch {
-      setMessage("提交失败，请稍后重试");
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : "提交失败，请稍后重试";
+      setMessage(reason);
       setMessageTone("error");
     } finally {
       setSubmitting(false);

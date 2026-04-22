@@ -144,10 +144,39 @@ export default function ResultPage() {
           })
         }
         onStartMonitor={async () => {
-          await createMonitor(viewModel.monitorTarget);
-          Taro.switchTab({ url: "/pages/monitor/index" });
+          try {
+            const m = (await createMonitor(viewModel.monitorTarget)) as {
+              id?: string;
+            } | null;
+            if (!m || typeof m.id !== "string") {
+              throw new Error("创建监控失败");
+            }
+            Taro.showToast({
+              title: "已加入监控",
+              icon: "success",
+              duration: 1200,
+            });
+            Taro.switchTab({ url: "/pages/monitor/index" });
+          } catch (error) {
+            const reason =
+              error instanceof Error
+                ? error.message
+                : "加入监控失败，请稍后重试";
+            Taro.showToast({ title: reason, icon: "none", duration: 3000 });
+          }
         }}
         onContactAdvisor={() => Taro.switchTab({ url: "/pages/profile/index" })}
+        onActionTap={(action) => {
+          if (/顾问|联系|咨询|申诉|和解/.test(action)) {
+            Taro.switchTab({ url: "/pages/profile/index" });
+            return;
+          }
+          if (/监控|持续观察|继续观察|关注/.test(action)) {
+            Taro.switchTab({ url: "/pages/monitor/index" });
+            return;
+          }
+          Taro.showToast({ title: action, icon: "none", duration: 3000 });
+        }}
       />
     </View>
   );

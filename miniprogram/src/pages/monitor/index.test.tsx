@@ -4,6 +4,7 @@ import MonitorPage from "./index";
 
 const taro = vi.hoisted(() => ({
   request: vi.fn(),
+  getStorageSync: vi.fn(() => "test-token"),
 }));
 
 vi.mock("@tarojs/taro", () => ({
@@ -35,10 +36,12 @@ describe("MonitorPage", () => {
     render(<MonitorPage />);
 
     await waitFor(() => {
-      expect(taro.request).toHaveBeenCalledWith({
-        url: "http://127.0.0.1:3000/api/monitors",
-        method: "GET",
-      });
+      expect(taro.request).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: "http://127.0.0.1:3000/api/monitors",
+          method: "GET",
+        }),
+      );
     });
     expect(screen.getByText("adidas")).toBeTruthy();
   });

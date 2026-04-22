@@ -330,6 +330,20 @@ input {
 .action-list__item:last-child {
   border-bottom: none;
 }
+.action-list__item--tappable {
+  cursor: pointer;
+  transition: background 0.15s ease;
+  margin: 0 -6px;
+  padding-left: 6px;
+  padding-right: 6px;
+  border-radius: 6px;
+}
+.action-list__item--tappable:hover {
+  background: #fff0f3;
+}
+.action-list__item--tappable:active {
+  background: #ffe0e5;
+}
 
 /* =========================================================
    Section block (used inside report detail)

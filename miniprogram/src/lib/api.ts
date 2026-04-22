@@ -6,6 +6,13 @@ const API_BASE =
   (typeof process !== "undefined" && process.env?.TARO_APP_API_BASE) ||
   "http://127.0.0.1:3000";
 
+/**
+ * Always await a valid anonymous token before issuing any request. Using a
+ * sync "best-effort" header in some call sites caused the very-first GET of a
+ * fresh session to go out without Authorization, landing on the anonymous
+ * bucket (`user_id IS NULL`) while the subsequent POST would correctly pick
+ * up the newly-minted token — producing "list looks empty" bugs.
+ */
 async function buildAuthHeader(options: {
   contentType?: boolean;
 }): Promise<Record<string, string>> {
@@ -13,9 +20,6 @@ async function buildAuthHeader(options: {
   if (options.contentType) {
     header["Content-Type"] = "application/json";
   }
-  // Guarantee we have a token before authed calls. Prevents the very-first
-  // API call of a session from going out unauthenticated while
-  // `ensureUserToken()` is still in-flight from app bootstrap.
   let token = readCachedToken();
   if (!token) {
     try {
@@ -28,20 +32,6 @@ async function buildAuthHeader(options: {
     header.Authorization = `Bearer ${token}`;
   }
   return header;
-}
-
-function buildHeader(init: {
-  contentType?: boolean;
-}): Record<string, string> | undefined {
-  const header: Record<string, string> = {};
-  if (init.contentType) {
-    header["Content-Type"] = "application/json";
-  }
-  const token = readCachedToken();
-  if (token) {
-    header.Authorization = `Bearer ${token}`;
-  }
-  return Object.keys(header).length > 0 ? header : undefined;
 }
 
 export interface CreateQueryTaskResponse {
@@ -114,7 +104,7 @@ export async function getQueryTask(
   const response = await Taro.request({
     url: `${API_BASE}/api/query-tasks/${taskId}`,
     method: "GET",
-    header: buildHeader({}),
+    header: await buildAuthHeader({}),
   });
   return response.data as QueryTaskStatusResponse;
 }
@@ -123,7 +113,7 @@ export async function listStoreProducts(storeName: string) {
   const response = await Taro.request({
     url: `${API_BASE}/api/storefronts/${encodeURIComponent(storeName)}/products`,
     method: "GET",
-    header: buildHeader({}),
+    header: await buildAuthHeader({}),
   });
   return response.data;
 }
@@ -167,7 +157,19 @@ export async function createMonitor(input: {
     data: input,
   });
 
-  return response.data;
+  const payload = response.data as
+    | { id: string; status: string }
+    | { code?: string; message?: string }
+    | null;
+
+  if (!payload || typeof (payload as { id?: string }).id !== "string") {
+    const message =
+      (payload as { message?: string } | null)?.message ??
+      `创建监控失败 (HTTP ${response.statusCode ?? "unknown"})`;
+    throw new Error(message);
+  }
+
+  return payload;
 }
 
 export interface MonitorListItem {
@@ -183,7 +185,7 @@ export async function listMonitors(): Promise<{ items: MonitorListItem[] }> {
   const response = await Taro.request({
     url: `${API_BASE}/api/monitors`,
     method: "GET",
-    header: buildHeader({}),
+    header: await buildAuthHeader({}),
   });
 
   return response.data as { items: MonitorListItem[] };
@@ -196,7 +198,7 @@ export async function updateMonitorStatus(
   const response = await Taro.request({
     url: `${API_BASE}/api/monitors/${id}`,
     method: "PATCH",
-    header: buildHeader({ contentType: true }),
+    header: await buildAuthHeader({ contentType: true }),
     data: { status },
   });
   return response.data;
@@ -206,7 +208,7 @@ export async function deleteMonitor(id: string) {
   await Taro.request({
     url: `${API_BASE}/api/monitors/${id}`,
     method: "DELETE",
-    header: buildHeader({}),
+    header: await buildAuthHeader({}),
   });
 }
 
@@ -264,7 +266,20 @@ export async function createConsultation(input: {
     header: await buildAuthHeader({ contentType: true }),
     data: input,
   });
-  return response.data as ConsultationItem;
+
+  const payload = response.data as
+    | ConsultationItem
+    | { statusCode?: number; code?: string; message?: string }
+    | null;
+
+  if (!payload || typeof (payload as ConsultationItem).id !== "string") {
+    const message =
+      (payload as { message?: string } | null)?.message ??
+      `提交咨询失败 (HTTP ${response.statusCode ?? "unknown"})`;
+    throw new Error(message);
+  }
+
+  return payload as ConsultationItem;
 }
 
 export async function listConsultations(): Promise<{
@@ -273,7 +288,7 @@ export async function listConsultations(): Promise<{
   const response = await Taro.request({
     url: `${API_BASE}/api/consultations`,
     method: "GET",
-    header: buildHeader({}),
+    header: await buildAuthHeader({}),
   });
   return response.data as { items: ConsultationItem[] };
 }
@@ -282,7 +297,7 @@ export async function listMessages(): Promise<MessageItem[]> {
   const response = await Taro.request({
     url: `${API_BASE}/api/messages`,
     method: "GET",
-    header: buildHeader({}),
+    header: await buildAuthHeader({}),
   });
   return (response.data as MessageItem[]) ?? [];
 }

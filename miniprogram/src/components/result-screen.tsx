@@ -32,6 +32,7 @@ export function ResultScreen({
   onUnlockReport,
   onStartMonitor,
   onContactAdvisor,
+  onActionTap,
 }: {
   toolName: string;
   summary: string;
@@ -49,6 +50,7 @@ export function ResultScreen({
   onUnlockReport(): void;
   onStartMonitor(): void;
   onContactAdvisor(): void;
+  onActionTap?: (action: string) => void;
 }) {
   const badgeText = dataSourceBadge(dataSource);
 
@@ -90,7 +92,15 @@ export function ResultScreen({
         <Text className="card__title">建议动作</Text>
         <View className="action-list">
           {actions.map((action) => (
-            <View key={action} className="action-list__item">
+            <View
+              key={action}
+              className={
+                onActionTap
+                  ? "action-list__item action-list__item--tappable"
+                  : "action-list__item"
+              }
+              onClick={onActionTap ? () => onActionTap(action) : undefined}
+            >
               <Text>{action}</Text>
             </View>
           ))}
