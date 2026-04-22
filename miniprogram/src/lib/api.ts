@@ -90,7 +90,22 @@ export async function createQueryTask(input: {
     data: input,
   });
 
-  return response.data as CreateQueryTaskResponse;
+  const payload = response.data as
+    | CreateQueryTaskResponse
+    | { statusCode?: number; error?: string; message?: string; code?: string }
+    | null;
+
+  if (
+    !payload ||
+    typeof (payload as CreateQueryTaskResponse).taskId !== "string"
+  ) {
+    const message =
+      (payload as { message?: string } | null)?.message ??
+      `创建检测任务失败 (HTTP ${response.statusCode ?? "unknown"})`;
+    throw new Error(message);
+  }
+
+  return payload as CreateQueryTaskResponse;
 }
 
 export async function getQueryTask(

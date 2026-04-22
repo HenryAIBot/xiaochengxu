@@ -126,14 +126,121 @@ function initializeSchema(db: QueryTaskDatabase) {
   ensureColumn(db, "leads", "user_id", "TEXT");
 }
 
-export function createQueryTaskDatabase(filePath = DEFAULT_DB_PATH) {
+function openDatabase(filePath: string) {
   if (filePath !== ":memory:") {
     mkdirSync(dirname(filePath), { recursive: true });
   }
-
   const db = new Database(filePath);
   initializeSchema(db);
   return db;
+}
+
+function isStaleConnectionError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as { code?: string }).code;
+  return (
+    code === "SQLITE_READONLY_DBMOVED" ||
+    code === "SQLITE_IOERR_READ" ||
+    code === "SQLITE_IOERR" ||
+    code === "SQLITE_CORRUPT"
+  );
+}
+
+/**
+ * Wrap the sqlite connection so that if the underlying file gets
+ * replaced out from under us (e.g. developer deletes or `git checkout`s
+ * the db during `tsx watch`) we transparently reopen it and retry the
+ * operation once. In-memory databases can't move, so they bypass the
+ * resilience layer.
+ */
+function wrapResilient(
+  filePath: string,
+  initialDb: QueryTaskDatabase,
+): QueryTaskDatabase {
+  if (filePath === ":memory:") return initialDb;
+
+  let current = initialDb;
+
+  const reopen = (reason: unknown) => {
+    try {
+      current.close();
+    } catch {
+      // ignore close errors on already-broken connection
+    }
+    console.warn(
+      "[api] reopening sqlite connection after transient error:",
+      (reason as { code?: string })?.code ?? reason,
+    );
+    current = openDatabase(filePath);
+  };
+
+  // biome-ignore lint/suspicious/noExplicitAny: native statement object
+  function wrapStatement(sql: string, stmt: any): any {
+    return new Proxy(stmt, {
+      get(target, stmtProp) {
+        const method = Reflect.get(target, stmtProp);
+        if (typeof method !== "function") return method;
+        // biome-ignore lint/suspicious/noExplicitAny: forwarding
+        return (...stmtArgs: any[]) => {
+          try {
+            return (method as (...a: unknown[]) => unknown).apply(
+              target,
+              stmtArgs,
+            );
+          } catch (error) {
+            if (!isStaleConnectionError(error)) throw error;
+            reopen(error);
+            // biome-ignore lint/suspicious/noExplicitAny: retry with fresh stmt
+            const freshStmt = (current as any).prepare(sql);
+            return (freshStmt as Record<string, Function>)[
+              stmtProp as string
+            ].apply(freshStmt, stmtArgs);
+          }
+        };
+      },
+    });
+  }
+
+  const handler: ProxyHandler<QueryTaskDatabase> = {
+    get(_, prop) {
+      // biome-ignore lint/suspicious/noExplicitAny: dynamic dispatch
+      const value = (current as any)[prop];
+      if (typeof value !== "function") return value;
+      if (prop === "prepare") {
+        return (sql: string) => {
+          try {
+            // biome-ignore lint/suspicious/noExplicitAny: forwarding
+            const stmt = (current as any).prepare(sql);
+            return wrapStatement(sql, stmt);
+          } catch (error) {
+            if (!isStaleConnectionError(error)) throw error;
+            reopen(error);
+            // biome-ignore lint/suspicious/noExplicitAny: retry
+            const stmt = (current as any).prepare(sql);
+            return wrapStatement(sql, stmt);
+          }
+        };
+      }
+      return (...args: unknown[]) => {
+        try {
+          // biome-ignore lint/suspicious/noExplicitAny: forwarding
+          return (value as any).apply(current, args);
+        } catch (error) {
+          if (!isStaleConnectionError(error)) throw error;
+          reopen(error);
+          // biome-ignore lint/suspicious/noExplicitAny: retry
+          return (current as any)[prop as string].apply(current, args);
+        }
+      };
+    },
+  };
+
+  return new Proxy({} as QueryTaskDatabase, handler);
+}
+
+export function createQueryTaskDatabase(filePath = DEFAULT_DB_PATH) {
+  const db = openDatabase(filePath);
+  return wrapResilient(filePath, db);
 }
 
 export function createInMemoryDb() {
