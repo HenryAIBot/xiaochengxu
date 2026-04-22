@@ -10,7 +10,7 @@ export default function HomePage() {
         onSubmit={async (payload) => {
           if (
             payload.tool === "infringement_check" &&
-            /\s(store|shop)$/i.test(payload.input)
+            /(\bstore|\bshop|店铺)$/i.test(payload.input)
           ) {
             const candidates = await listStoreProducts(payload.input);
             Taro.setStorageSync("storeCandidates", candidates.items);

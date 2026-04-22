@@ -50,8 +50,19 @@ export default function ProfilePage() {
   async function submit() {
     const trimmedName = name.trim();
     const trimmedPhone = phone.trim();
-    if (!trimmedName || !trimmedPhone) {
+    // Backend pattern: ^\+?\d{7,15}$ — strip everything except leading +
+    // and digits so user-friendly inputs like "138 0013 8000",
+    // "(86) 138-0013-8000" still pass validation.
+    const plusPrefix = trimmedPhone.startsWith("+") ? "+" : "";
+    const normalizedPhone = plusPrefix + trimmedPhone.replace(/\D/g, "");
+    if (!trimmedName || !normalizedPhone || normalizedPhone === "+") {
       setMessage("请填写姓名和手机号");
+      setMessageTone("error");
+      return;
+    }
+    const phonePattern = /^\+?\d{7,15}$/;
+    if (!phonePattern.test(normalizedPhone)) {
+      setMessage("手机号格式不正确（7-15 位数字，可带 +）");
       setMessageTone("error");
       return;
     }
@@ -60,7 +71,7 @@ export default function ProfilePage() {
     try {
       await createConsultation({
         name: trimmedName,
-        phone: trimmedPhone,
+        phone: normalizedPhone,
         note: note.trim() || undefined,
       });
       setMessage("已提交顾问咨询，我们会尽快联系您");

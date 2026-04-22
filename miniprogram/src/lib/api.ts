@@ -1,24 +1,45 @@
 import Taro from "@tarojs/taro";
-import { readCachedToken } from "./auth";
+import { ensureUserToken, readCachedToken } from "./auth";
 import type { ReportDetail } from "./report-detail-view-model";
 
 const API_BASE =
   (typeof process !== "undefined" && process.env?.TARO_APP_API_BASE) ||
   "http://127.0.0.1:3000";
 
+async function buildAuthHeader(options: {
+  contentType?: boolean;
+}): Promise<Record<string, string>> {
+  const header: Record<string, string> = {};
+  if (options.contentType) {
+    header["Content-Type"] = "application/json";
+  }
+  // Guarantee we have a token before authed calls. Prevents the very-first
+  // API call of a session from going out unauthenticated while
+  // `ensureUserToken()` is still in-flight from app bootstrap.
+  let token = readCachedToken();
+  if (!token) {
+    try {
+      token = await ensureUserToken();
+    } catch {
+      token = null;
+    }
+  }
+  if (token) {
+    header.Authorization = `Bearer ${token}`;
+  }
+  return header;
+}
+
 function buildHeader(init: {
   contentType?: boolean;
-  withAuth?: boolean;
 }): Record<string, string> | undefined {
   const header: Record<string, string> = {};
   if (init.contentType) {
     header["Content-Type"] = "application/json";
   }
-  if (init.withAuth !== false) {
-    const token = readCachedToken();
-    if (token) {
-      header.Authorization = `Bearer ${token}`;
-    }
+  const token = readCachedToken();
+  if (token) {
+    header.Authorization = `Bearer ${token}`;
   }
   return Object.keys(header).length > 0 ? header : undefined;
 }
@@ -65,7 +86,7 @@ export async function createQueryTask(input: {
   const response = await Taro.request({
     url: `${API_BASE}/api/query-tasks`,
     method: "POST",
-    header: buildHeader({ contentType: true }),
+    header: await buildAuthHeader({ contentType: true }),
     data: input,
   });
 
@@ -99,7 +120,7 @@ export async function unlockReport(
   const response = await Taro.request({
     url: `${API_BASE}/api/reports/${reportId}/unlock`,
     method: "POST",
-    header: buildHeader({ contentType: true }),
+    header: await buildAuthHeader({ contentType: true }),
     data: input,
   });
 
@@ -115,7 +136,7 @@ export async function createMonitor(input: {
   const response = await Taro.request({
     url: `${API_BASE}/api/monitors`,
     method: "POST",
-    header: buildHeader({ contentType: true }),
+    header: await buildAuthHeader({ contentType: true }),
     data: input,
   });
 
@@ -201,7 +222,7 @@ export async function createConsultation(input: {
   const response = await Taro.request({
     url: `${API_BASE}/api/consultations`,
     method: "POST",
-    header: buildHeader({ contentType: true }),
+    header: await buildAuthHeader({ contentType: true }),
     data: input,
   });
   return response.data as ConsultationItem;
