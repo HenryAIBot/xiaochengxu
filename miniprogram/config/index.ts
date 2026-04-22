@@ -1,5 +1,14 @@
 import { defineConfig } from "@tarojs/cli";
 
+const pxtransformConfig = {
+  designWidth: 750,
+  deviceRatio: {
+    640: 2.34 / 2,
+    750: 1,
+    828: 1.81 / 2,
+  },
+};
+
 export default defineConfig({
   projectName: "xiaochengxu",
   date: "2026-04-15",
@@ -7,6 +16,8 @@ export default defineConfig({
   outputRoot: "dist",
   framework: "react",
   compiler: "webpack5",
+  designWidth: 750,
+  deviceRatio: pxtransformConfig.deviceRatio,
   mini: {
     webpackChain(chain) {
       chain.resolve.alias.set("@tarojs/shared", false);
@@ -14,6 +25,7 @@ export default defineConfig({
     postcss: {
       pxtransform: {
         enable: true,
+        config: pxtransformConfig,
       },
     },
   },
@@ -25,6 +37,7 @@ export default defineConfig({
     postcss: {
       pxtransform: {
         enable: true,
+        config: pxtransformConfig,
       },
     },
   },
