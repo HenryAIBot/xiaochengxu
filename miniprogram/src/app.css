@@ -475,74 +475,80 @@ input {
 }
 
 /* =========================================================
-   Taro H5 tab bar polish (Taro renders its own tabbar)
+   Taro H5 tab bar polish
+   Taro renders WeUI-based tabbar markup:
+     taro-tabbar > div.weui-tabbar > a.weui-tabbar__item > img.weui-tabbar__icon + p.weui-tabbar__label
    ========================================================= */
-.taro-tabbar__container {
-  box-shadow: 0 -4px 16px rgba(15, 52, 96, 0.08) !important;
+.taro-tabbar__tabbar,
+.weui-tabbar {
   background: #fff !important;
+  box-shadow: 0 -4px 16px rgba(15, 52, 96, 0.08) !important;
   border-top: none !important;
   padding-bottom: env(safe-area-inset-bottom, 0) !important;
 }
-.taro-tabbar__tabbar {
-  background: transparent !important;
-  border-top: none !important;
-  height: 58px !important;
-  max-height: 58px !important;
-}
-.taro-tabbar__tabbar-item {
+.weui-tabbar__item {
   position: relative;
   padding: 8px 0 6px !important;
+  color: var(--color-text-subtle) !important;
 }
-/* Hide the empty icon <img> slot when no iconPath is configured. */
-.taro-tabbar__tabbar-item-icon,
-.taro-tabbar__tabbar-icon,
-.taro-tabbar__tabbar-icon-normal,
-.taro-tabbar__tabbar-icon-selected {
+/* Hide the empty <img> slot: no iconPath configured. */
+.weui-tabbar__icon,
+.weui-tabbar__item > img {
   display: none !important;
 }
-.taro-tabbar__tabbar-item-text,
-.taro-tabbar__tabbar-text {
+.weui-tabbar__label {
   font-size: 13px !important;
-  color: var(--color-text-subtle) !important;
-  font-weight: 500;
+  font-weight: 500 !important;
+  line-height: 1 !important;
+  margin: 0 !important;
   display: flex !important;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  line-height: 1;
+  color: inherit !important;
 }
-/* Emoji glyph before each label, indexed by tab order. */
-.taro-tabbar__tabbar-item:nth-child(1) .taro-tabbar__tabbar-item-text::before {
+/* Emoji glyph before each label, by tab order. */
+.weui-tabbar__item:nth-of-type(1) .weui-tabbar__label::before {
   content: "🏠";
   font-size: 18px;
+  line-height: 1;
 }
-.taro-tabbar__tabbar-item:nth-child(2) .taro-tabbar__tabbar-item-text::before {
-  content: "🛰️";
+.weui-tabbar__item:nth-of-type(2) .weui-tabbar__label::before {
+  content: "🛰";
   font-size: 18px;
+  line-height: 1;
 }
-.taro-tabbar__tabbar-item:nth-child(3) .taro-tabbar__tabbar-item-text::before {
+.weui-tabbar__item:nth-of-type(3) .weui-tabbar__label::before {
   content: "📄";
   font-size: 18px;
+  line-height: 1;
 }
-.taro-tabbar__tabbar-item:nth-child(4) .taro-tabbar__tabbar-item-text::before {
+.weui-tabbar__item:nth-of-type(4) .weui-tabbar__label::before {
   content: "🔔";
   font-size: 18px;
+  line-height: 1;
 }
-.taro-tabbar__tabbar-item:nth-child(5) .taro-tabbar__tabbar-item-text::before {
+.weui-tabbar__item:nth-of-type(5) .weui-tabbar__label::before {
   content: "👤";
   font-size: 18px;
+  line-height: 1;
 }
-/* Active tab: underline accent + primary colour. */
-.taro-tabbar__tabbar-item-text--active,
-.taro-tabbar__tabbar-item--active .taro-tabbar__tabbar-item-text {
+/* Active state — Taro toggles text colour inline via `style` but the
+   underline is ours. */
+.weui-tabbar__item.weui-bar__item_on,
+.weui-tabbar__item[class*="_on"] {
   color: var(--color-primary) !important;
-  font-weight: 600;
 }
-.taro-tabbar__tabbar-item--active::after,
-.taro-tabbar__tabbar-item-text--active::after {
+.weui-tabbar__item.weui-bar__item_on .weui-tabbar__label,
+.weui-tabbar__item[class*="_on"] .weui-tabbar__label {
+  color: var(--color-primary) !important;
+  font-weight: 600 !important;
+}
+.weui-tabbar__item.weui-bar__item_on::after,
+.weui-tabbar__item[class*="_on"]::after {
   content: "";
   position: absolute;
-  bottom: 2px;
+  bottom: 3px;
   left: 30%;
   right: 30%;
   height: 3px;
