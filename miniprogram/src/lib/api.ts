@@ -139,7 +139,19 @@ export async function unlockReport(
     data: input,
   });
 
-  return response.data;
+  const payload = response.data as
+    | { id: string; unlocked: boolean; fullReportUrl: string }
+    | { code?: string; message?: string }
+    | null;
+
+  if (!payload || !(payload as { unlocked?: boolean }).unlocked) {
+    const message =
+      (payload as { message?: string } | null)?.message ??
+      `解锁失败 (HTTP ${response.statusCode ?? "unknown"})`;
+    throw new Error(message);
+  }
+
+  return payload;
 }
 
 export async function createMonitor(input: {
@@ -202,10 +214,22 @@ export async function getReport(reportId: string): Promise<ReportDetail> {
   const response = await Taro.request({
     url: `${API_BASE}/api/reports/${reportId}`,
     method: "GET",
-    header: buildHeader({}),
+    header: await buildAuthHeader({}),
   });
 
-  return response.data as ReportDetail;
+  const payload = response.data as
+    | ReportDetail
+    | { code?: string; message?: string }
+    | null;
+
+  if (!payload || typeof (payload as ReportDetail).id !== "string") {
+    const message =
+      (payload as { message?: string } | null)?.message ??
+      `无法加载报告 (HTTP ${response.statusCode ?? "unknown"})`;
+    throw new Error(message);
+  }
+
+  return payload as ReportDetail;
 }
 
 export interface MessageItem {

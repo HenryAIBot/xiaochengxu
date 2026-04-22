@@ -62,8 +62,10 @@ export function ReportUnlockScreen({
 
       setMessage("完整报告已解锁");
       setMessageTone("ok");
-    } catch {
-      setMessage("报告解锁失败，请稍后重试");
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : "报告解锁失败，请稍后重试";
+      setMessage(reason);
       setMessageTone("error");
     } finally {
       setIsSubmitting(false);
