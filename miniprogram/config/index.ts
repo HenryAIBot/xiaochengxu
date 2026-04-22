@@ -35,8 +35,11 @@ export default defineConfig({
     },
     publicPath: "/",
     postcss: {
+      // Disable pxtransform for H5: CSS is written in real browser px and
+      // should not be converted to rpx/rem, which would shrink everything
+      // ~40x on desktop viewports (see Taro's H5WebpackPlugin rootValue).
       pxtransform: {
-        enable: true,
+        enable: false,
         config: pxtransformConfig,
       },
     },
