@@ -1,0 +1,483 @@
+/* =========================================================
+   Design tokens
+   ========================================================= */
+:root {
+  --color-primary: #0f3460;
+  --color-primary-dark: #16213e;
+  --color-accent: #e94560;
+  --color-accent-dark: #c23152;
+
+  --color-bg: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-muted: #f7f8fa;
+  --color-border: #e0e0e0;
+  --color-divider: #f0f0f0;
+
+  --color-text: #333;
+  --color-text-muted: #666;
+  --color-text-subtle: #999;
+  --color-text-faint: #bbb;
+
+  --risk-high-bg: #ffe0e3;
+  --risk-high-fg: #e94560;
+  --risk-watch-bg: #fff3e0;
+  --risk-watch-fg: #f57c00;
+  --risk-clear-bg: #e8f5e9;
+  --risk-clear-fg: #4caf50;
+  --risk-confirmed-bg: #ffebee;
+  --risk-confirmed-fg: #c62828;
+
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-hover: 0 4px 14px rgba(0, 0, 0, 0.12);
+
+  --radius-card: 12px;
+  --radius-input: 8px;
+  --radius-pill: 20px;
+
+  --gradient-header: linear-gradient(
+    135deg,
+    #1a1a2e 0%,
+    #16213e 50%,
+    #0f3460 100%
+  );
+  --gradient-primary: linear-gradient(135deg, #e94560, #c23152);
+  --gradient-secondary: linear-gradient(135deg, #0f3460, #16213e);
+}
+
+/* =========================================================
+   Reset & base
+   ========================================================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+input {
+  font: inherit;
+}
+
+/* =========================================================
+   Layout containers
+   ========================================================= */
+.app-header {
+  background: var(--gradient-header);
+  color: #fff;
+  padding: 20px 16px 18px;
+  text-align: center;
+}
+.app-header__title {
+  display: block;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.app-header__subtitle {
+  display: block;
+  font-size: 12px;
+  opacity: 0.72;
+  margin-top: 4px;
+}
+
+.page {
+  padding: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+  padding-bottom: 72px; /* leave space for Taro h5 tab bar */
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  color: var(--color-text);
+  display: block;
+}
+
+/* =========================================================
+   Card
+   ========================================================= */
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: 18px;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 12px;
+  display: block;
+}
+
+.card__title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: block;
+}
+.card__text {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  line-height: 1.55;
+  display: block;
+}
+.card__meta {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  display: block;
+}
+
+/* =========================================================
+   Buttons
+   ========================================================= */
+.btn {
+  display: inline-block;
+  text-align: center;
+  padding: 12px 18px;
+  border-radius: var(--radius-input);
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  background: var(--color-muted);
+  color: var(--color-text);
+  transition: opacity 0.18s ease, transform 0.1s ease;
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn--block {
+  width: 100%;
+  display: block;
+}
+.btn--primary {
+  background: var(--gradient-primary);
+  color: #fff;
+}
+.btn--primary:hover {
+  opacity: 0.92;
+}
+.btn--secondary {
+  background: var(--gradient-secondary);
+  color: #fff;
+}
+.btn--ghost {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-primary);
+}
+.btn--danger-ghost {
+  background: transparent;
+  color: var(--color-accent);
+  border: 1.5px solid var(--color-accent);
+}
+.btn--compact {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.btn--disabled,
+.btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* =========================================================
+   Form inputs
+   ========================================================= */
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-input);
+  font-size: 15px;
+  outline: none;
+  background: #fff;
+  transition: border-color 0.18s ease;
+  margin-bottom: 10px;
+}
+.input:focus {
+  border-color: var(--color-primary);
+}
+
+/* =========================================================
+   Risk badges
+   ========================================================= */
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--color-muted);
+  color: var(--color-text-muted);
+}
+.badge--high {
+  background: var(--risk-high-bg);
+  color: var(--risk-high-fg);
+}
+.badge--watch {
+  background: var(--risk-watch-bg);
+  color: var(--risk-watch-fg);
+}
+.badge--clear {
+  background: var(--risk-clear-bg);
+  color: var(--risk-clear-fg);
+}
+.badge--confirmed {
+  background: var(--risk-confirmed-bg);
+  color: var(--risk-confirmed-fg);
+}
+.badge--fixture {
+  background: #fff7ed;
+  color: #d97706;
+  border: 1px dashed #fbbf24;
+  margin-bottom: 12px;
+}
+
+/* =========================================================
+   Tool selector (radio-like segmented control)
+   ========================================================= */
+.tool-selector {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.tool-selector__btn {
+  flex: 1;
+  padding: 10px 6px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-input);
+  background: #fff;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  transition: all 0.18s ease;
+  text-align: center;
+}
+.tool-selector__btn--active {
+  border-color: var(--color-primary);
+  background: #f0f4ff;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* =========================================================
+   Evidence / action list
+   ========================================================= */
+.evidence-item {
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-accent);
+  background: #fff8f9;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+.evidence-item--watch {
+  border-left-color: var(--risk-watch-fg);
+  background: #fff9ef;
+}
+.evidence-item__title {
+  font-weight: 600;
+  color: var(--color-text);
+  display: block;
+  margin-bottom: 2px;
+}
+.evidence-item__source {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  display: block;
+  margin-bottom: 4px;
+}
+.evidence-item__body {
+  display: block;
+}
+
+.action-list {
+  margin-top: 12px;
+  list-style: none;
+  padding: 0;
+}
+.action-list__item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.action-list__item::before {
+  content: "›";
+  color: var(--color-accent);
+  font-weight: bold;
+  font-size: 16px;
+}
+.action-list__item:last-child {
+  border-bottom: none;
+}
+
+/* =========================================================
+   Section block (used inside report detail)
+   ========================================================= */
+.section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-divider);
+}
+.section__title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--color-text);
+  display: block;
+}
+
+/* =========================================================
+   Stats grid
+   ========================================================= */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+.stat-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: 14px;
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+.stat-card__num {
+  display: block;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+.stat-card__label {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  margin-top: 4px;
+}
+
+/* =========================================================
+   Monitor / message items
+   ========================================================= */
+.list-item {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 12px;
+}
+.list-item__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.list-item__title {
+  font-size: 15px;
+  font-weight: 600;
+  display: block;
+}
+.list-item__sub {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  margin-top: 3px;
+  display: block;
+}
+.list-item__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-text-faint);
+}
+.status-dot--active {
+  background: var(--risk-clear-fg);
+  box-shadow: 0 0 6px rgba(76, 175, 80, 0.5);
+}
+.status-dot--paused {
+  background: var(--risk-watch-fg);
+}
+
+/* =========================================================
+   Empty / loading / error states
+   ========================================================= */
+.state {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  padding: 28px 20px;
+  text-align: center;
+  box-shadow: var(--shadow-card);
+}
+.state__title {
+  font-size: 15px;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 6px;
+}
+.state__text {
+  font-size: 13px;
+  color: var(--color-text-subtle);
+  line-height: 1.55;
+  display: block;
+}
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   Form hint / helper text
+   ========================================================= */
+.hint {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  margin-top: 4px;
+  display: block;
+}
+.hint--error {
+  color: var(--color-accent);
+}
+
+/* =========================================================
+   Taro H5 tab bar polish (Taro renders its own tabbar)
+   ========================================================= */
+.taro-tabbar__tabbar {
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06) !important;
+  border-top: 1px solid var(--color-divider) !important;
+}

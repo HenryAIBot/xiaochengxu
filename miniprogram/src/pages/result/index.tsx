@@ -84,19 +84,40 @@ export default function ResultPage() {
 
   if (pageStatus.kind === "loading") {
     return (
-      <View>
-        <Text>检测中…正在查询外部数据源</Text>
+      <View className="page">
+        <View className="state">
+          <View className="spinner" />
+          <Text className="state__title">检测中…</Text>
+          <Text className="state__text">正在查询外部数据源，请稍候</Text>
+        </View>
       </View>
     );
   }
 
   if (pageStatus.kind === "failed") {
     return (
-      <View>
-        <Text>检测失败</Text>
-        <Text>{pageStatus.reason}</Text>
-        <Button onClick={() => void hydrate()}>重试</Button>
-        <Button onClick={() => Taro.navigateBack()}>返回首页</Button>
+      <View className="page">
+        <View className="state">
+          <Text className="state__title">检测失败</Text>
+          <Text className="state__text">{pageStatus.reason}</Text>
+          <View
+            className="list-item__actions"
+            style={{ justifyContent: "center", marginTop: "16px" }}
+          >
+            <Button
+              className="btn btn--primary btn--compact"
+              onClick={() => void hydrate()}
+            >
+              重试
+            </Button>
+            <Button
+              className="btn btn--ghost btn--compact"
+              onClick={() => Taro.navigateBack()}
+            >
+              返回首页
+            </Button>
+          </View>
+        </View>
       </View>
     );
   }
@@ -105,6 +126,10 @@ export default function ResultPage() {
 
   return (
     <View>
+      <View className="app-header">
+        <Text className="app-header__title">检测结果</Text>
+        <Text className="app-header__subtitle">{viewModel.toolName}</Text>
+      </View>
       <ResultScreen
         toolName={viewModel.toolName}
         level={viewModel.level}

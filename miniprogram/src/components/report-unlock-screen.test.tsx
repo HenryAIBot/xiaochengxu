@@ -18,10 +18,10 @@ describe("ReportUnlockScreen", () => {
 
     render(<ReportUnlockScreen onUnlock={onUnlock} />);
 
-    fireEvent.change(screen.getByPlaceholderText("邮箱"), {
+    fireEvent.change(screen.getByPlaceholderText("邮箱地址"), {
       target: { value: "seller@example.com" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "解锁完整报告" }));
+    fireEvent.click(screen.getByRole("button", { name: "立即解锁" }));
 
     expect(onUnlock).toHaveBeenCalledWith({ email: "seller@example.com" });
     await waitFor(() => {
@@ -34,10 +34,10 @@ describe("ReportUnlockScreen", () => {
 
     render(<ReportUnlockScreen onUnlock={onUnlock} />);
 
-    fireEvent.change(screen.getByPlaceholderText("手机号"), {
+    fireEvent.change(screen.getByPlaceholderText("手机号（选填）"), {
       target: { value: "+15551234567" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "解锁完整报告" }));
+    fireEvent.click(screen.getByRole("button", { name: "立即解锁" }));
 
     expect(onUnlock).toHaveBeenCalledWith({ phone: "+15551234567" });
   });
@@ -47,7 +47,7 @@ describe("ReportUnlockScreen", () => {
 
     render(<ReportUnlockScreen onUnlock={onUnlock} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "解锁完整报告" }));
+    fireEvent.click(screen.getByRole("button", { name: "立即解锁" }));
 
     expect(onUnlock).not.toHaveBeenCalled();
     expect(screen.getByText("请输入邮箱或手机号")).toBeTruthy();
@@ -82,10 +82,10 @@ describe("ReportUnlockScreen", () => {
 
     render(<ReportUnlockScreen onUnlock={onUnlock} />);
 
-    fireEvent.change(screen.getByPlaceholderText("邮箱"), {
+    fireEvent.change(screen.getByPlaceholderText("邮箱地址"), {
       target: { value: "seller@example.com" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "解锁完整报告" }));
+    fireEvent.click(screen.getByRole("button", { name: "立即解锁" }));
 
     await waitFor(() => {
       expect(screen.getByText("完整报告")).toBeTruthy();

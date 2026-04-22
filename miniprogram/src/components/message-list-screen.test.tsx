@@ -41,8 +41,8 @@ describe("MessageListScreen", () => {
     expect(screen.getByText("短信")).toBeTruthy();
     expect(screen.getByText("发现 Nike 品牌 TRO 信号。")).toBeTruthy();
     expect(screen.getByText("收到新的监控命中。")).toBeTruthy();
-    expect(screen.getByText("接收：seller@example.com")).toBeTruthy();
-    expect(screen.getByText("接收：+8613800138000")).toBeTruthy();
+    expect(screen.getByText(/接收：seller@example\.com/)).toBeTruthy();
+    expect(screen.getByText(/接收：\+8613800138000/)).toBeTruthy();
   });
 
   it("handles missing level and recipient gracefully", () => {
@@ -60,6 +60,6 @@ describe("MessageListScreen", () => {
 
     render(<MessageListScreen messages={messages} />);
     expect(screen.getByText("系统")).toBeTruthy();
-    expect(screen.getByText("接收：—")).toBeTruthy();
+    expect(screen.getByText(/接收：—/)).toBeTruthy();
   });
 });

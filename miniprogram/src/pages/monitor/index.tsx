@@ -1,4 +1,4 @@
-import { View } from "@tarojs/components";
+import { Text, View } from "@tarojs/components";
 import { useCallback, useEffect, useState } from "react";
 import { MonitorListScreen } from "../../components/monitor-list-screen";
 import {
@@ -22,17 +22,25 @@ export default function MonitorPage() {
 
   return (
     <View>
-      <MonitorListScreen
-        monitors={monitors}
-        onToggleStatus={async (id, next) => {
-          await updateMonitorStatus(id, next);
-          await reload();
-        }}
-        onDelete={async (id) => {
-          await deleteMonitor(id);
-          await reload();
-        }}
-      />
+      <View className="app-header">
+        <Text className="app-header__title">监控列表</Text>
+        <Text className="app-header__subtitle">
+          每 5 分钟自动轮询命中即推送
+        </Text>
+      </View>
+      <View className="page">
+        <MonitorListScreen
+          monitors={monitors}
+          onToggleStatus={async (id, next) => {
+            await updateMonitorStatus(id, next);
+            await reload();
+          }}
+          onDelete={async (id) => {
+            await deleteMonitor(id);
+            await reload();
+          }}
+        />
+      </View>
     </View>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import "./app.css";
 import { ensureUserToken } from "./lib/auth";
 
 export default function App(props) {

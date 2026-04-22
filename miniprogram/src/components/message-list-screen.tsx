@@ -7,6 +7,13 @@ const CHANNEL_LABELS: Record<MessageItem["channel"], string> = {
   system: "系统",
 };
 
+const LEVEL_BADGE: Record<string, string> = {
+  clear: "badge badge--clear",
+  watch: "badge badge--watch",
+  suspected_high: "badge badge--high",
+  confirmed: "badge badge--confirmed",
+};
+
 const LEVEL_LABELS: Record<string, string> = {
   clear: "安全",
   watch: "需关注",
@@ -15,7 +22,6 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 function formatTime(iso: string): string {
-  // Keep YYYY-MM-DD HH:MM in the user's local zone. Taro's Text renders strings verbatim.
   if (!iso) return "";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -30,8 +36,9 @@ export function MessageListScreen({
 }) {
   if (messages.length === 0) {
     return (
-      <View>
-        <Text>暂无新消息</Text>
+      <View className="state">
+        <Text className="state__title">暂无新消息</Text>
+        <Text className="state__text">监控命中或系统动态会推送到这里</Text>
       </View>
     );
   }
@@ -40,20 +47,28 @@ export function MessageListScreen({
     <View>
       {messages.map((message) => {
         const channelLabel = CHANNEL_LABELS[message.channel] ?? message.channel;
-        const levelLabel = message.level
+        const levelClass = message.level
+          ? (LEVEL_BADGE[message.level] ?? "badge")
+          : null;
+        const levelText = message.level
           ? (LEVEL_LABELS[message.level] ?? message.level)
           : null;
         const recipient = message.toAddress ?? "—";
 
         return (
-          <View key={message.id}>
-            <View>
-              <Text>{channelLabel}</Text>
-              {levelLabel ? <Text> · {levelLabel}</Text> : null}
-              <Text> · {formatTime(message.createdAt)}</Text>
+          <View key={message.id} className="list-item">
+            <View className="list-item__row">
+              <Text className="list-item__title">{channelLabel}</Text>
+              {levelClass && levelText ? (
+                <Text className={levelClass}>{levelText}</Text>
+              ) : null}
             </View>
-            <Text>{message.body}</Text>
-            <Text>接收：{recipient}</Text>
+            <Text className="card__text" style={{ marginTop: "10px" }}>
+              {message.body}
+            </Text>
+            <Text className="list-item__sub" style={{ marginTop: "8px" }}>
+              接收：{recipient} · {formatTime(message.createdAt)}
+            </Text>
           </View>
         );
       })}

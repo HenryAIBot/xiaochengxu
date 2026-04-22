@@ -8,10 +8,11 @@ describe("HomeScreen", () => {
 
     render(<HomeScreen onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText("品牌词 / 店铺名 / ASIN"), {
-      target: { value: "nike" },
-    });
-    fireEvent.click(screen.getByText("TRO预警"));
+    fireEvent.change(
+      screen.getByPlaceholderText("品牌词 / 店铺名 / ASIN / 案件号"),
+      { target: { value: "nike" } },
+    );
+    fireEvent.click(screen.getByText("TRO 预警"));
     fireEvent.click(screen.getByText("立即检测"));
 
     expect(onSubmit).toHaveBeenCalledWith({

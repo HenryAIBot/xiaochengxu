@@ -39,7 +39,7 @@ describe("MessagesPage", () => {
     await waitFor(() => {
       expect(screen.getByText("新的 TRO 命中。")).toBeTruthy();
     });
-    expect(screen.getByText("接收：seller@example.com")).toBeTruthy();
+    expect(screen.getByText(/接收：seller@example\.com/)).toBeTruthy();
   });
 
   it("shows empty state when API returns no messages", async () => {
