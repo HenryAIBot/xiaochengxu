@@ -7,6 +7,11 @@ import {
   createQueryTaskDatabase,
 } from "./lib/db.js";
 import { type RequestUser, resolveRequestUser } from "./lib/user-identity.js";
+import type { WeChatAuthConfig } from "./lib/wechat.js";
+import {
+  registerAdvisorRoutes,
+  seedDefaultAdvisors,
+} from "./routes/advisors.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerConsultationRoutes } from "./routes/consultations.js";
 import { registerInternalRoutes } from "./routes/internal.js";
@@ -50,6 +55,12 @@ export interface BuildAppOptions {
    * a spy or pass `null` to disable.
    */
   auditLog?: ((entry: AuditLogEntry) => void) | null;
+  /**
+   * WeChat auth configuration. When present, `POST /api/auth/wechat` will
+   * exchange a wx.login code for an openid via jscode2session and return a
+   * token. Pass `fetch` to stub the upstream call in tests.
+   */
+  wechat?: WeChatAuthConfig | null;
 }
 
 export interface AuditLogEntry {
@@ -140,7 +151,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   }
 
   app.get("/health", async () => ({ ok: true }));
-  app.register(registerAuthRoutes);
+  app.register(registerAuthRoutes({ wechat: options.wechat ?? null }));
   app.register(registerQueryTaskRoutes);
   app.register(registerInternalRoutes);
   app.register(registerReportRoutes);
@@ -149,6 +160,9 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(registerLeadRoutes);
   app.register(registerStorefrontRoutes);
   app.register(registerConsultationRoutes);
+  app.register(registerAdvisorRoutes);
+
+  seedDefaultAdvisors(db);
 
   if (ownsDb) {
     app.addHook("onClose", async () => {

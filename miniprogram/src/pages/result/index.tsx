@@ -2,7 +2,12 @@ import { Button, Text, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { useCallback, useEffect, useState } from "react";
 import { ResultScreen } from "../../components/result-screen";
-import { createMonitor, getQueryTask } from "../../lib/api";
+import {
+  type ConsultationTargetRef,
+  createMonitor,
+  getQueryTask,
+} from "../../lib/api";
+import { setConsultationContext } from "../../lib/consultation-context";
 import { PollTimeoutError, pollUntil } from "../../lib/polling";
 import { readQueryResult, saveQueryResult } from "../../lib/query-result-cache";
 import {
@@ -165,7 +170,19 @@ export default function ResultPage() {
             Taro.showToast({ title: reason, icon: "none", duration: 3000 });
           }
         }}
-        onContactAdvisor={() => Taro.switchTab({ url: "/pages/profile/index" })}
+        onContactAdvisor={() => {
+          setConsultationContext({
+            targetRef: {
+              kind: viewModel.monitorTarget
+                .targetKind as ConsultationTargetRef["kind"],
+              value: viewModel.monitorTarget.targetValue,
+            },
+            sourceReportId: viewModel.reportId,
+            sourceQueryTaskId: viewModel.taskId,
+            label: `${viewModel.toolName} · ${viewModel.monitorTarget.targetValue}`,
+          });
+          Taro.switchTab({ url: "/pages/profile/index" });
+        }}
         onActionTap={(action) => {
           if (/顾问|联系|咨询|申诉|和解/.test(action)) {
             Taro.switchTab({ url: "/pages/profile/index" });

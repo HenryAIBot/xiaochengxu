@@ -3,7 +3,7 @@ import Taro from "@tarojs/taro";
 const TOKEN_STORAGE_KEY = "userToken";
 const USER_ID_STORAGE_KEY = "userId";
 
-interface AnonymousAuthResponse {
+interface TokenResponse {
   userId: string;
   token: string;
 }
@@ -32,6 +32,52 @@ export function readCachedToken(): string | null {
   return null;
 }
 
+function isWeappEnv(): boolean {
+  try {
+    return Taro.getEnv?.() === Taro.ENV_TYPE.WEAPP;
+  } catch {
+    return false;
+  }
+}
+
+async function wxLoginCode(): Promise<string | null> {
+  try {
+    const { code } = await Taro.login();
+    return typeof code === "string" && code.length > 0 ? code : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistAndReturn(payload: TokenResponse): string {
+  try {
+    Taro.setStorageSync(TOKEN_STORAGE_KEY, payload.token);
+    Taro.setStorageSync(USER_ID_STORAGE_KEY, payload.userId);
+  } catch {
+    // non-fatal in test environments
+  }
+  cachedToken = payload.token;
+  return payload.token;
+}
+
+async function requestWechatToken(code: string): Promise<string | null> {
+  try {
+    const response = await Taro.request({
+      url: `${apiBase()}/api/auth/wechat`,
+      method: "POST",
+      header: { "Content-Type": "application/json" },
+      data: { code },
+    });
+    const statusCode = (response as { statusCode?: number }).statusCode ?? 200;
+    if (statusCode >= 400) return null;
+    const payload = response.data as TokenResponse;
+    if (!payload?.token) return null;
+    return persistAndReturn(payload);
+  } catch {
+    return null;
+  }
+}
+
 async function requestAnonymousToken(): Promise<string> {
   const response = await Taro.request({
     url: `${apiBase()}/api/auth/anonymous`,
@@ -39,16 +85,22 @@ async function requestAnonymousToken(): Promise<string> {
     header: { "Content-Type": "application/json" },
     data: {},
   });
-
-  const payload = response.data as AnonymousAuthResponse;
+  const payload = response.data as TokenResponse;
   if (!payload?.token) {
     throw new Error("匿名鉴权失败：服务端未返回 token");
   }
+  return persistAndReturn(payload);
+}
 
-  Taro.setStorageSync(TOKEN_STORAGE_KEY, payload.token);
-  Taro.setStorageSync(USER_ID_STORAGE_KEY, payload.userId);
-  cachedToken = payload.token;
-  return payload.token;
+async function acquireToken(): Promise<string> {
+  if (isWeappEnv()) {
+    const code = await wxLoginCode();
+    if (code) {
+      const wechatToken = await requestWechatToken(code);
+      if (wechatToken) return wechatToken;
+    }
+  }
+  return requestAnonymousToken();
 }
 
 export async function ensureUserToken(): Promise<string> {
@@ -56,7 +108,7 @@ export async function ensureUserToken(): Promise<string> {
   if (cached) return cached;
   if (pending) return pending;
 
-  pending = requestAnonymousToken().finally(() => {
+  pending = acquireToken().finally(() => {
     pending = null;
   });
   return pending;

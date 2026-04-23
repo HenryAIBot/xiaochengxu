@@ -9,3 +9,22 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: xiaochengxu
+      POSTGRES_PASSWORD: dev-local
+      POSTGRES_DB: xiaochengxu
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xiaochengxu -d xiaochengxu"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:

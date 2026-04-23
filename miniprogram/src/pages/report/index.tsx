@@ -2,6 +2,7 @@ import { Text, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { ReportUnlockScreen } from "../../components/report-unlock-screen";
 import { getReport, unlockReport } from "../../lib/api";
+import { setConsultationContext } from "../../lib/consultation-context";
 
 function routeAction(action: string) {
   if (/顾问|联系|咨询|申诉|和解/.test(action)) {
@@ -33,7 +34,13 @@ export default function ReportPage() {
           return getReport(reportId);
         }}
         onActionTap={routeAction}
-        onContactAdvisor={() => Taro.switchTab({ url: "/pages/profile/index" })}
+        onContactAdvisor={() => {
+          setConsultationContext({
+            sourceReportId: reportId,
+            label: `报告 ${reportId}`,
+          });
+          Taro.switchTab({ url: "/pages/profile/index" });
+        }}
         onStartMonitor={() => Taro.switchTab({ url: "/pages/monitor/index" })}
       />
     </View>

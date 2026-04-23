@@ -244,6 +244,11 @@ export interface MessageItem {
   createdAt: string;
 }
 
+export interface ConsultationTargetRef {
+  kind: "brand" | "store" | "asin" | "amazon_url" | "case_number";
+  value: string;
+}
+
 export interface ConsultationItem {
   id: string;
   name: string;
@@ -251,14 +256,38 @@ export interface ConsultationItem {
   note: string | null;
   status: string;
   advisor: string | null;
+  advisorId?: string | null;
+  advisorSpecialty?: string | null;
+  targetRef?: ConsultationTargetRef | null;
+  sourceReportId?: string | null;
+  sourceQueryTaskId?: string | null;
   createdAt: string;
   updatedAt: string | null;
+}
+
+export interface AdvisorListItem {
+  id: string;
+  name: string;
+  specialty: string | null;
+}
+
+export async function listAdvisors(): Promise<AdvisorListItem[]> {
+  const response = await Taro.request({
+    url: `${API_BASE}/api/advisors`,
+    method: "GET",
+    header: await buildAuthHeader({}),
+  });
+  const payload = response.data as { items?: AdvisorListItem[] } | null;
+  return payload?.items ?? [];
 }
 
 export async function createConsultation(input: {
   name: string;
   phone: string;
   note?: string;
+  targetRef?: ConsultationTargetRef;
+  sourceReportId?: string;
+  sourceQueryTaskId?: string;
 }): Promise<ConsultationItem> {
   const response = await Taro.request({
     url: `${API_BASE}/api/consultations`,

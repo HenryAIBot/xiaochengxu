@@ -225,3 +225,48 @@ xiaochengxu/
 - **BullMQ 重试**：`packages/queue/src/queues.ts` 导出 `DEFAULT_JOB_OPTIONS`（`attempts: 3` + 指数退避 5s，`removeOnComplete/removeOnFail` 保留窗口），query / notification / monitor 三条队列统一应用。
 
 测试增长：39 → 140（+101）。代码文件数：91 → 129（+38）。
+
+### 20 轮（2026-04-23）：WeChat 鉴权 / 顾问分配 / Postgres 基础设施
+
+**结论**：
+- 测试：140 → **158**（+18；其中 4 个 Postgres 烟雾测试需要 `DATABASE_URL_TEST` 才跑）
+- 任务 A/B/C 完全落地，D 落到"基础设施就绪、路由代码待迁移"的 partial 状态
+- `pnpm lint` / `pnpm test` / `pnpm build` 全绿
+
+**A. `dc7c45b` 四个修复浏览器自测** — 用 CDP 脚本 + 真后端驱动 headless Chrome：home → nike → 立即检测 → 解锁 → 加入监控 → /我的提交咨询 `15279825102`。四项全部通过（见 `/tmp/xiaochengxu-preview/step*.png`）。
+
+**B. WeChat openid 鉴权**（done）
+- `services/api/src/lib/wechat.ts` — `exchangeCodeForOpenId(code, config)` 调官方 `jscode2session`，fetch 可注入
+- `services/api/src/routes/auth.ts` 新增 `POST /api/auth/wechat`（JSON Schema 校验 code），按 openid upsert 到 `users` 表，返回既有 token（幂等）
+- `users` 表新增 `wechat_openid` (unique) / `wechat_union_id` 两列
+- `BuildAppOptions.wechat` 可选配置；server 读 `WECHAT_APPID` / `WECHAT_SECRET` / `WECHAT_JSCODE2SESSION_URL`
+- 前端 `miniprogram/src/lib/auth.ts` 在 WEAPP env 里先 `wx.login()` → `POST /api/auth/wechat`；失败回落到匿名
+- `tests/api/wechat-auth.test.ts`（6 case）：未配置 503 / 新用户 201 / 老用户 200 同 token / jscode2session errcode → 400 / 缺 code → 400 schema / 返回 token 在受保护端点可用
+
+**C. 顾问分配后端 + 咨询上下文透传**（done）
+- 新增 `advisors` 表 + `services/api/src/routes/advisors.ts`：`GET /api/advisors`（只暴露 id/name/specialty，不漏手机/邮箱）+ `POST /api/internal/advisors`（受 `INTERNAL_API_TOKEN` 保护）
+- 首次启动自动 seed 两位示例顾问（陈顾问/林顾问）；`pickNextAdvisor()` 按 `last_assigned_at` 升序挑最空闲的，真正 round-robin
+- `consultations` 表加 `advisor_id` / `target_ref_kind` / `target_ref_value` / `source_report_id` / `source_query_task_id`
+- `POST /api/consultations` 接受 `targetRef` + 来源 ID；命中即 `status:"assigned"` + 返回 `advisor` / `advisorSpecialty`；`GET` JOIN advisors 带出 specialty
+- 新增 `PATCH /api/consultations/:id`（status 枚举 pending/assigned/in_progress/closed，按 user_id 隔离 404）
+- 前端 `miniprogram/src/lib/consultation-context.ts` — sessionStorage 传状态跨 tab（`switchTab` 本身不支持 query），10 min TTL，消费后立刻清掉
+- result / report 页的"联系顾问"按钮写上下文再跳；Profile 页挂载时读出，显示"本次咨询对象"横幅并在 `createConsultation` 里带上
+- `tests/api/advisors-and-consultations.test.ts`（6 case）：seed / LRU 轮询 / targetRef 往返 / 非法 kind 400 / PATCH 隔离 / 内部端点鉴权
+
+**D. Postgres 基础设施**（partial — 基础设施就绪，路由代码未迁移）
+
+做完：
+- `services/api/src/lib/postgres-schema.sql` — 8 张表的 Postgres DDL（JSONB / TIMESTAMPTZ / ON DELETE SET NULL / 索引），与 sqlite schema 等价
+- `services/api/src/lib/postgres.ts` — `createPostgresPool(url)` + `applyPostgresSchema(pool)`（幂等）+ `pgAll/pgGet/pgRun` 辅助 + `rewritePlaceholders()` 把 sqlite 风格 `?` 翻译成 `$N`
+- `services/api/src/scripts/apply-postgres-schema.ts` — CLI 迁移脚本，暴露为 `pnpm --filter @xiaochengxu/api db:migrate:pg`
+- `docker-compose.yml` 加 `postgres:17-alpine` + 健康检查 + 持久卷
+- `pg` + `@types/pg` 加到 `services/api/package.json`
+- `.env.example` 加 `DATABASE_URL` 注释
+- `tests/api/postgres-schema.test.ts` — 6 个烟雾测试：2 个纯函数（`rewritePlaceholders`）总跑；4 个真 Postgres 烟雾（`DATABASE_URL_TEST` 才跑）覆盖 DDL apply / users 插入回读 / openid 唯一约束 / pgAll 列表
+
+未做（留给下一轮）：
+- 把 routes 里的 `db.prepare().get/.all/.run` 全部换成 async 走 pool —— 涉及 ~60 处 + 测试里 ~20 处用例重写，是独立的重构
+- Drizzle ORM / 其他 ORM 封装（schema 目前仍是手写 SQL）
+- docker-compose api/jobs 编排（Postgres 服务已加，但应用本身还没 Dockerfile）
+
+**当前路由代码仍走 SQLite**。生产要上 Postgres 的路径：(a) 起 `docker compose up postgres` (b) `export DATABASE_URL=postgres://...` (c) `pnpm --filter @xiaochengxu/api db:migrate:pg` 建 schema (d) 下轮迭代把 routes 从 sqlite 切到 pg pool。

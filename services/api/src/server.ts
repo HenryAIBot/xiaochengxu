@@ -14,6 +14,23 @@ async function main() {
   const rateLimitRedis = process.env.RATE_LIMIT_REDIS_URL
     ? createRedisConnection(process.env.RATE_LIMIT_REDIS_URL)
     : undefined;
+
+  const wechatAppId = process.env.WECHAT_APPID;
+  const wechatAppSecret = process.env.WECHAT_SECRET;
+  const wechat =
+    wechatAppId && wechatAppSecret
+      ? {
+          appId: wechatAppId,
+          appSecret: wechatAppSecret,
+          endpoint: process.env.WECHAT_JSCODE2SESSION_URL,
+        }
+      : null;
+  if (!wechat) {
+    console.warn(
+      "[api] WECHAT_APPID / WECHAT_SECRET not set — /api/auth/wechat will return 503. Anonymous auth still works.",
+    );
+  }
+
   const app = buildApp({
     queue,
     internalToken,
@@ -22,6 +39,7 @@ async function main() {
       timeWindow: rateLimitWindow,
       redis: rateLimitRedis,
     },
+    wechat,
   });
 
   try {

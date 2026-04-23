@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "lint": "biome check src"
+    "lint": "biome check src",
+    "db:migrate:pg": "tsx src/scripts/apply-postgres-schema.ts"
   },
   "dependencies": {
     "@fastify/rate-limit": "^10.3.0",
@@ -13,9 +14,11 @@
     "@xiaochengxu/queue": "workspace:*",
     "@xiaochengxu/tools": "workspace:*",
     "better-sqlite3": "^11.8.1",
-    "fastify": "^5.2.2"
+    "fastify": "^5.2.2",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13"
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.20.0"
   }
 }

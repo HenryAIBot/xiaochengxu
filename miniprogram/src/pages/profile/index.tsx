@@ -2,20 +2,37 @@ import { Button, Input, Text, View } from "@tarojs/components";
 import { useCallback, useEffect, useState } from "react";
 import {
   type ConsultationItem,
+  type ConsultationTargetRef,
   createConsultation,
   listConsultations,
 } from "../../lib/api";
+import {
+  type ConsultationContext,
+  consumeConsultationContext,
+} from "../../lib/consultation-context";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "待分配",
   assigned: "已分配顾问",
+  in_progress: "处理中",
+  closed: "已完成",
   done: "已完成",
 };
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "badge badge--watch",
   assigned: "badge badge--clear",
+  in_progress: "badge badge--clear",
+  closed: "badge",
   done: "badge",
+};
+
+const TARGET_KIND_LABELS: Record<ConsultationTargetRef["kind"], string> = {
+  brand: "品牌",
+  store: "店铺",
+  asin: "ASIN",
+  amazon_url: "商品链接",
+  case_number: "案件号",
 };
 
 function readInputValue(event: {
@@ -33,6 +50,7 @@ export default function ProfilePage() {
   const [messageTone, setMessageTone] = useState<"ok" | "error">("ok");
   const [submitting, setSubmitting] = useState(false);
   const [items, setItems] = useState<ConsultationItem[]>([]);
+  const [context, setContext] = useState<ConsultationContext | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -44,15 +62,13 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
+    setContext(consumeConsultationContext());
     void load();
   }, [load]);
 
   async function submit() {
     const trimmedName = name.trim();
     const trimmedPhone = phone.trim();
-    // Backend pattern: ^\+?\d{7,15}$ — strip everything except leading +
-    // and digits so user-friendly inputs like "138 0013 8000",
-    // "(86) 138-0013-8000" still pass validation.
     const plusPrefix = trimmedPhone.startsWith("+") ? "+" : "";
     const normalizedPhone = plusPrefix + trimmedPhone.replace(/\D/g, "");
     if (!trimmedName) {
@@ -76,16 +92,23 @@ export default function ProfilePage() {
     setSubmitting(true);
     setMessage("");
     try {
-      await createConsultation({
+      const result = await createConsultation({
         name: trimmedName,
         phone: normalizedPhone,
         note: note.trim() || undefined,
+        targetRef: context?.targetRef,
+        sourceReportId: context?.sourceReportId,
+        sourceQueryTaskId: context?.sourceQueryTaskId,
       });
-      setMessage("已提交顾问咨询，我们会尽快联系您");
+      const advisorMsg = result.advisor
+        ? `已分配给 ${result.advisor}，将尽快与您联系`
+        : "已提交，我们会在分配顾问后尽快联系您";
+      setMessage(advisorMsg);
       setMessageTone("ok");
       setName("");
       setPhone("");
       setNote("");
+      setContext(null);
       await load();
     } catch (error) {
       const reason =
@@ -108,6 +131,27 @@ export default function ProfilePage() {
       <View className="page">
         <View className="card">
           <Text className="card__title">提交咨询</Text>
+          {context ? (
+            <View
+              className="evidence-item evidence-item--watch"
+              style={{ marginBottom: "10px" }}
+            >
+              <Text className="evidence-item__title">
+                本次咨询对象：{context.label ?? ""}
+              </Text>
+              {context.targetRef ? (
+                <Text className="evidence-item__source">
+                  {TARGET_KIND_LABELS[context.targetRef.kind]}：
+                  {context.targetRef.value}
+                </Text>
+              ) : null}
+              {context.sourceReportId ? (
+                <Text className="evidence-item__body">
+                  关联报告：{context.sourceReportId}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           <Input
             className="input"
             placeholder="姓名"
@@ -164,7 +208,15 @@ export default function ProfilePage() {
                     {STATUS_LABELS[item.status] ?? item.status}
                   </Text>
                   {item.advisor ? ` · 顾问：${item.advisor}` : ""}
+                  {item.advisorSpecialty ? ` · ${item.advisorSpecialty}` : ""}
                 </Text>
+                {item.targetRef ? (
+                  <Text className="evidence-item__body">
+                    咨询对象：
+                    {TARGET_KIND_LABELS[item.targetRef.kind]} ·{" "}
+                    {item.targetRef.value}
+                  </Text>
+                ) : null}
                 {item.note ? (
                   <Text className="evidence-item__body">备注：{item.note}</Text>
                 ) : null}

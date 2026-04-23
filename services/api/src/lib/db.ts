@@ -81,6 +81,8 @@ function initializeSchema(db: QueryTaskDatabase) {
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       token TEXT NOT NULL UNIQUE,
+      wechat_openid TEXT UNIQUE,
+      wechat_union_id TEXT,
       created_at TEXT NOT NULL,
       last_seen_at TEXT
     );
@@ -95,6 +97,16 @@ function initializeSchema(db: QueryTaskDatabase) {
       advisor TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS advisors (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
+      specialty TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
     );
   `);
 
@@ -124,6 +136,21 @@ function initializeSchema(db: QueryTaskDatabase) {
   ensureColumn(db, "query_tasks", "user_id", "TEXT");
   ensureColumn(db, "monitors", "user_id", "TEXT");
   ensureColumn(db, "leads", "user_id", "TEXT");
+  ensureColumn(db, "users", "wechat_openid", "TEXT");
+  ensureColumn(db, "users", "wechat_union_id", "TEXT");
+  ensureColumn(db, "consultations", "advisor_id", "TEXT");
+  ensureColumn(db, "consultations", "target_ref_kind", "TEXT");
+  ensureColumn(db, "consultations", "target_ref_value", "TEXT");
+  ensureColumn(db, "consultations", "source_report_id", "TEXT");
+  ensureColumn(db, "consultations", "source_query_task_id", "TEXT");
+  ensureColumn(db, "advisors", "last_assigned_at", "TEXT");
+  try {
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_wechat_openid ON users(wechat_openid) WHERE wechat_openid IS NOT NULL",
+    );
+  } catch {
+    // SQLite ignores partial index create failures if syntax unsupported; ignore
+  }
 }
 
 function openDatabase(filePath: string) {
@@ -192,9 +219,9 @@ function wrapResilient(
             reopen(error);
             // biome-ignore lint/suspicious/noExplicitAny: retry with fresh stmt
             const freshStmt = (current as any).prepare(sql);
-            return (freshStmt as Record<string, Function>)[
-              stmtProp as string
-            ].apply(freshStmt, stmtArgs);
+            return (
+              freshStmt as Record<string, (...args: unknown[]) => unknown>
+            )[stmtProp as string].apply(freshStmt, stmtArgs);
           }
         };
       },

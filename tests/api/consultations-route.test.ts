@@ -37,11 +37,14 @@ describe("consultations routes", () => {
       },
     });
     expect(created.statusCode).toBe(201);
+    // Seeded advisors auto-assign, so status flips to "assigned"
     expect(created.json()).toMatchObject({
       name: "张三",
       phone: "+8613800138000",
-      status: "pending",
+      status: "assigned",
     });
+    expect(created.json().advisor).toEqual(expect.any(String));
+    expect(created.json().advisorId).toEqual(expect.any(String));
 
     const list = await app.inject({
       method: "GET",
