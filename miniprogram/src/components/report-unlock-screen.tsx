@@ -85,41 +85,50 @@ export function ReportUnlockScreen({
 
   return (
     <View className="page">
-      <View className="card">
-        <Text className="card__title">解锁完整报告</Text>
-        <Text className="card__text">
-          查看完整证据、关联原因、案件列表和处理清单
-        </Text>
-        <Input
-          className="input"
-          placeholder="邮箱地址"
-          value={email}
-          onInput={(event) => setEmail(readInputValue(event))}
-          onChange={(event) => setEmail(readInputValue(event))}
-        />
-        <Input
-          className="input"
-          placeholder="手机号（选填）"
-          value={phone}
-          onInput={(event) => setPhone(readInputValue(event))}
-          onChange={(event) => setPhone(readInputValue(event))}
-        />
-        <Text className="hint">邮箱或手机号任选其一；仅用于报告推送</Text>
-        {message ? (
-          <Text
-            className={messageTone === "error" ? "hint hint--error" : "hint"}
-          >
-            {message}
+      {fullReport ? (
+        <View className="card card--success">
+          <Text className="badge badge--clear">完整报告已解锁</Text>
+          <Text className="card__text" style={{ marginTop: "6px" }}>
+            已推送到 {email || phone}
           </Text>
-        ) : null}
-        <Button
-          className="btn btn--primary btn--block"
-          style={{ marginTop: "14px" }}
-          onClick={submitUnlock}
-        >
-          {isSubmitting ? "解锁中..." : "立即解锁"}
-        </Button>
-      </View>
+        </View>
+      ) : (
+        <View className="card">
+          <Text className="card__title">解锁完整报告</Text>
+          <Text className="card__text">
+            查看完整证据、关联原因、案件列表和处理清单
+          </Text>
+          <Input
+            className="input"
+            placeholder="邮箱地址"
+            value={email}
+            onInput={(event) => setEmail(readInputValue(event))}
+            onChange={(event) => setEmail(readInputValue(event))}
+          />
+          <Input
+            className="input"
+            placeholder="手机号（选填）"
+            value={phone}
+            onInput={(event) => setPhone(readInputValue(event))}
+            onChange={(event) => setPhone(readInputValue(event))}
+          />
+          <Text className="hint">邮箱或手机号任选其一；仅用于报告推送</Text>
+          {message ? (
+            <Text
+              className={messageTone === "error" ? "hint hint--error" : "hint"}
+            >
+              {message}
+            </Text>
+          ) : null}
+          <Button
+            className="btn btn--primary btn--block"
+            style={{ marginTop: "14px" }}
+            onClick={submitUnlock}
+          >
+            {isSubmitting ? "解锁中..." : "立即解锁"}
+          </Button>
+        </View>
+      )}
 
       {fullReport ? (
         <FullReportContent
