@@ -353,3 +353,37 @@ xiaochengxu/
 **K. 上游 PR（本轮提）**
 
 本轮测试增长：164 → 168（+4 Postgres E2E）。代码变更：21 个文件改动、3 个新文件。文件累计：155+。
+
+### 23 轮（2026-04-24）：UX 收尾 + 运维铺垫
+
+**A. 解锁报告 UI 折叠（done）** — 成功后"立即解锁"卡片换成绿徽章，不再和完整报告同屏竞争标题
+
+**B. 按钮 loading 态巡检（done）**
+- `result-screen` 加入监控按钮在 onStartMonitor 期间禁用 + "加入中…"；onStartMonitor 签名放宽为 Promise | void
+- `monitor-list-screen` 每行暂停/删除有 `pendingId` busy 锁；删除加二次确认行（"确认删除？" + 确认/取消按钮）
+- `store-candidate-screen` + `select-product/index.tsx` 补上 try/catch + toast，按钮在 busy 时禁用
+
+**C. 视觉 tokens 小轮（done）**
+- 加 `--space-1..6` / `--font-xs..3xl` / `--ease` / `--duration` tokens
+- 加 `.card--success` / `.card--highlight` / `.btn--danger` / `.mt-{1..6}` 工具类
+- 加 `:focus-visible` 统一的 a11y outline
+
+**D. per-monitor 自定义频率（done）**
+- schema：`monitors.tick_interval_seconds INTEGER` 列（sqlite+pg）
+- POST `/api/monitors` + PATCH `/api/monitors/:id` 接受 `tickIntervalSeconds` (60-86400)
+- 新增 `GET /api/internal/monitors/due`：server-side 过滤 `lastCheckedAt + tickInterval <= now`，worker 改 fetch due 接口
+- UI：monitor-list 每行"检测频率"五段选择（5m / 15m / 1h / 4h / 每天）
+- 测试：monitor-lifecycle 加 3 case；新 monitor-due-route.test.ts 4 case
+
+**E. 通知 DLQ + 重试（done）**
+- `QueueClient` 新增 `listFailedNotifications(limit)` / `retryFailedNotification(jobId)`
+- notification worker 加 `'failed'` 事件日志（区分 retry vs 终态 DLQ）
+- 新增 `GET /api/internal/notifications/failed` + `POST /api/internal/notifications/failed/:jobId/retry`
+- 新 notifications-dlq-route.test.ts 3 case
+
+**F. CI 发布到 GHCR（done）**
+- `.github/workflows/ci.yml` docker-images job 翻 `push: true`
+- 加 `permissions: packages: write` + `docker/login-action` 用 `GITHUB_TOKEN`
+- 镜像 tag：`ghcr.io/<owner>/xiaochengxu-{api,jobs}:<sha>` + `:latest`
+
+本轮测试增长：168 → 179（+11；6 monitor + 3 dlq + 2 lifecycle）。代码变更：21 文件改 + 2 新测试。

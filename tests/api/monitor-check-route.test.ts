@@ -10,6 +10,12 @@ function makeRecordingQueue() {
       notifications.push(payload);
     },
     async enqueueAdvisorNotification() {},
+    async listFailedNotifications() {
+      return [];
+    },
+    async retryFailedNotification() {
+      return { retried: false };
+    },
     async close() {},
   };
   return { client, notifications };

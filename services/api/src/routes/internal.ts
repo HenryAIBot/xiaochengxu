@@ -139,6 +139,60 @@ export async function registerInternalRoutes(app: FastifyInstance) {
     },
   );
 
+  app.get("/api/internal/notifications/failed", async (request) => {
+    const url = new URL(request.url, "http://placeholder");
+    const limitRaw = url.searchParams.get("limit");
+    const limit = limitRaw ? Math.min(500, Math.max(1, Number(limitRaw))) : 50;
+    const items = await app.queue.listFailedNotifications(limit);
+    return { items };
+  });
+
+  app.post(
+    "/api/internal/notifications/failed/:jobId/retry",
+    async (request, reply) => {
+      const { jobId } = request.params as { jobId: string };
+      const result = await app.queue.retryFailedNotification(jobId);
+      if (!result.retried) {
+        return reply.code(404).send({ error: "failed job not found" });
+      }
+      return { jobId, retried: true };
+    },
+  );
+
+  app.get("/api/internal/monitors/due", async () => {
+    const globalDefault = Number(
+      process.env.MONITOR_TICK_INTERVAL_MS ?? 300_000,
+    );
+    const rows = await app.db
+      .prepare(
+        `SELECT id,
+                status,
+                tick_interval_seconds AS "tickIntervalSeconds",
+                last_checked_at AS "lastCheckedAt"
+         FROM monitors
+         WHERE status = 'active'`,
+      )
+      .all<{
+        id: string;
+        status: string;
+        tickIntervalSeconds: number | null;
+        lastCheckedAt: string | null;
+      }>();
+
+    const now = Date.now();
+    const items = rows.filter((row) => {
+      if (!row.lastCheckedAt) return true;
+      const intervalMs =
+        (row.tickIntervalSeconds ?? Math.floor(globalDefault / 1000)) * 1000;
+      const last = new Date(row.lastCheckedAt).getTime();
+      return Number.isFinite(last) && now - last >= intervalMs;
+    });
+
+    return {
+      items: items.map((row) => ({ id: row.id, status: row.status })),
+    };
+  });
+
   app.post(
     "/api/internal/monitors/:monitorId/check",
     async (request, reply) => {

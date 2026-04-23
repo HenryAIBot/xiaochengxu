@@ -5,6 +5,7 @@ import {
   type MonitorListItem,
   deleteMonitor,
   listMonitors,
+  updateMonitorInterval,
   updateMonitorStatus,
 } from "../../lib/api";
 
@@ -37,6 +38,10 @@ export default function MonitorPage() {
           }}
           onDelete={async (id) => {
             await deleteMonitor(id);
+            await reload();
+          }}
+          onChangeInterval={async (id, seconds) => {
+            await updateMonitorInterval(id, seconds);
             await reload();
           }}
         />

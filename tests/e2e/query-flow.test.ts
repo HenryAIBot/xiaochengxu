@@ -46,6 +46,12 @@ describe("query flow (end to end)", () => {
     },
     async enqueueNotification() {},
     async enqueueAdvisorNotification() {},
+    async listFailedNotifications() {
+      return [];
+    },
+    async retryFailedNotification() {
+      return { retried: false };
+    },
     async close() {},
   };
 

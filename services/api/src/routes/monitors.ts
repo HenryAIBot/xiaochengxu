@@ -6,20 +6,30 @@ interface CreateMonitorBody {
   targetValue: string;
   notifyEmail?: string;
   notifyPhone?: string;
+  tickIntervalSeconds?: number;
 }
 
 interface UpdateMonitorBody {
-  status: "active" | "paused";
+  status?: "active" | "paused";
+  tickIntervalSeconds?: number | null;
 }
+
+const MIN_TICK = 60; // 1 min
+const MAX_TICK = 86_400; // 1 day
 
 const updateMonitorSchema: FastifySchema = {
   body: {
     type: "object",
-    required: ["status"],
     additionalProperties: false,
     properties: {
       status: { type: "string", enum: ["active", "paused"] },
+      tickIntervalSeconds: {
+        type: ["integer", "null"],
+        minimum: MIN_TICK,
+        maximum: MAX_TICK,
+      },
     },
+    anyOf: [{ required: ["status"] }, { required: ["tickIntervalSeconds"] }],
   },
 };
 
@@ -39,6 +49,11 @@ const createMonitorSchema: FastifySchema = {
         type: "string",
         pattern: "^\\+?\\d{7,15}$",
       },
+      tickIntervalSeconds: {
+        type: "integer",
+        minimum: MIN_TICK,
+        maximum: MAX_TICK,
+      },
     },
   },
 };
@@ -48,8 +63,6 @@ export async function registerMonitorRoutes(app: FastifyInstance) {
     const userId = request.user?.id ?? null;
     const whereClause = userId === null ? "user_id IS NULL" : "user_id = ?";
     const params = userId === null ? [] : [userId];
-    // `rowid` is sqlite-specific; use created_at if available else id to keep
-    // Postgres happy. Monitors don't have created_at yet — fall back to id.
     const orderColumn = app.db.dialect === "postgres" ? "id" : "rowid";
     const items = await app.db
       .prepare(
@@ -58,7 +71,9 @@ export async function registerMonitorRoutes(app: FastifyInstance) {
                 target_value AS "targetValue",
                 notify_email AS "notifyEmail",
                 notify_phone AS "notifyPhone",
-                status
+                status,
+                tick_interval_seconds AS "tickIntervalSeconds",
+                last_checked_at AS "lastCheckedAt"
          FROM monitors
          WHERE ${whereClause}
          ORDER BY ${orderColumn} DESC`,
@@ -81,12 +96,13 @@ export async function registerMonitorRoutes(app: FastifyInstance) {
         notifyPhone: body.notifyPhone ?? null,
         status: "active" as const,
         userId: request.user?.id ?? null,
+        tickIntervalSeconds: body.tickIntervalSeconds ?? null,
       };
 
       await app.db
         .prepare(
-          `INSERT INTO monitors (id, target_kind, target_value, notify_email, notify_phone, status, user_id)
-           VALUES (@id, @targetKind, @targetValue, @notifyEmail, @notifyPhone, @status, @userId)`,
+          `INSERT INTO monitors (id, target_kind, target_value, notify_email, notify_phone, status, user_id, tick_interval_seconds)
+           VALUES (@id, @targetKind, @targetValue, @notifyEmail, @notifyPhone, @status, @userId, @tickIntervalSeconds)`,
         )
         .run(monitor);
 
@@ -97,6 +113,7 @@ export async function registerMonitorRoutes(app: FastifyInstance) {
         notifyEmail: monitor.notifyEmail,
         notifyPhone: monitor.notifyPhone,
         status: monitor.status,
+        tickIntervalSeconds: monitor.tickIntervalSeconds,
       });
     },
   );
@@ -113,11 +130,26 @@ export async function registerMonitorRoutes(app: FastifyInstance) {
       if (!row || row.userId !== userId) {
         return reply.code(404).send({ error: "monitor not found" });
       }
-      const { status } = request.body as UpdateMonitorBody;
+      const body = request.body as UpdateMonitorBody;
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      if (body.status !== undefined) {
+        sets.push("status = ?");
+        params.push(body.status);
+      }
+      if (body.tickIntervalSeconds !== undefined) {
+        sets.push("tick_interval_seconds = ?");
+        params.push(body.tickIntervalSeconds);
+      }
+      params.push(id);
       await app.db
-        .prepare("UPDATE monitors SET status = ? WHERE id = ?")
-        .run(status, id);
-      return reply.code(200).send({ id, status });
+        .prepare(`UPDATE monitors SET ${sets.join(", ")} WHERE id = ?`)
+        .run(...params);
+      return reply.code(200).send({
+        id,
+        status: body.status,
+        tickIntervalSeconds: body.tickIntervalSeconds,
+      });
     },
   );
 

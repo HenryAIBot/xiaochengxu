@@ -42,6 +42,29 @@
   );
   --gradient-primary: linear-gradient(135deg, #e94560, #c23152);
   --gradient-secondary: linear-gradient(135deg, #0f3460, #16213e);
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  /* Typography scale */
+  --font-xs: 12px;
+  --font-sm: 13px;
+  --font-base: 14px;
+  --font-md: 15px;
+  --font-lg: 16px;
+  --font-xl: 19px;
+  --font-2xl: 22px;
+  --font-3xl: 26px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration: 180ms;
 }
 
 /* =========================================================
@@ -121,8 +144,16 @@ input {
   border-radius: var(--radius-card);
   padding: 18px;
   box-shadow: var(--shadow-card);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
   display: block;
+}
+.card--success {
+  background: linear-gradient(135deg, #f4fbf5 0%, #eef8f0 100%);
+  border: 1px solid rgba(76, 175, 80, 0.25);
+}
+.card--highlight {
+  background: linear-gradient(135deg, #fff7ed 0%, #fff1e6 100%);
+  border-left: 4px solid var(--risk-watch-fg);
 }
 
 .card__title {
@@ -184,6 +215,11 @@ input {
 .btn--danger-ghost {
   background: transparent;
   color: var(--color-accent);
+  border: 1.5px solid var(--color-accent);
+}
+.btn--danger {
+  background: var(--color-accent);
+  color: #fff;
   border: 1.5px solid var(--color-accent);
 }
 .btn--compact {
@@ -486,6 +522,38 @@ input {
 }
 .hint--error {
   color: var(--color-accent);
+}
+
+/* =========================================================
+   Spacing utilities (design-token driven)
+   ========================================================= */
+.mt-1 {
+  margin-top: var(--space-1) !important;
+}
+.mt-2 {
+  margin-top: var(--space-2) !important;
+}
+.mt-3 {
+  margin-top: var(--space-3) !important;
+}
+.mt-4 {
+  margin-top: var(--space-4) !important;
+}
+.mt-5 {
+  margin-top: var(--space-5) !important;
+}
+.mt-6 {
+  margin-top: var(--space-6) !important;
+}
+
+/* =========================================================
+   Focus outlines (a11y)
+   ========================================================= */
+.btn:focus-visible,
+.input:focus-visible,
+.tool-selector__btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* =========================================================

@@ -1,4 +1,5 @@
 import { Button, Text, View } from "@tarojs/components";
+import { useState } from "react";
 
 const BADGE_CLASS: Record<string, string> = {
   clear: "badge badge--clear",
@@ -48,11 +49,22 @@ export function ResultScreen({
   actions: string[];
   dataSource?: string;
   onUnlockReport(): void;
-  onStartMonitor(): void;
+  onStartMonitor(): void | Promise<void>;
   onContactAdvisor(): void;
   onActionTap?: (action: string) => void;
 }) {
   const badgeText = dataSourceBadge(dataSource);
+  const [isStartingMonitor, setIsStartingMonitor] = useState(false);
+
+  async function handleStartMonitor() {
+    if (isStartingMonitor) return;
+    setIsStartingMonitor(true);
+    try {
+      await onStartMonitor();
+    } finally {
+      setIsStartingMonitor(false);
+    }
+  }
 
   return (
     <View className="page">
@@ -123,10 +135,15 @@ export function ResultScreen({
 
       <View className="list-item__actions">
         <Button
-          className="btn btn--secondary btn--block"
-          onClick={onStartMonitor}
+          className={
+            isStartingMonitor
+              ? "btn btn--secondary btn--block btn--disabled"
+              : "btn btn--secondary btn--block"
+          }
+          disabled={isStartingMonitor}
+          onClick={() => void handleStartMonitor()}
         >
-          加入监控
+          {isStartingMonitor ? "加入中…" : "加入监控"}
         </Button>
         <Button
           className="btn btn--ghost btn--block"

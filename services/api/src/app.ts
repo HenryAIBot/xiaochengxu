@@ -86,6 +86,12 @@ export function createNoopQueueClient(): QueueClient {
     async enqueueQuery() {},
     async enqueueNotification() {},
     async enqueueAdvisorNotification() {},
+    async listFailedNotifications() {
+      return [];
+    },
+    async retryFailedNotification() {
+      return { retried: false };
+    },
     async close() {},
   };
 }

@@ -14,6 +14,12 @@ function makeRecordingQueue(): { client: QueueClient; taskIds: string[] } {
       },
       async enqueueNotification() {},
       async enqueueAdvisorNotification() {},
+      async listFailedNotifications() {
+        return [];
+      },
+      async retryFailedNotification() {
+        return { retried: false };
+      },
       async close() {},
     },
   };

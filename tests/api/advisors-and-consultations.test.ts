@@ -12,6 +12,12 @@ function makeSpyQueue(): { queue: QueueClient; calls: unknown[] } {
       async enqueueAdvisorNotification(payload) {
         calls.push(payload);
       },
+      async listFailedNotifications() {
+        return [];
+      },
+      async retryFailedNotification() {
+        return { retried: false };
+      },
       async close() {},
     },
   };

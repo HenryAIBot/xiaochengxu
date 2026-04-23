@@ -101,7 +101,7 @@ new Worker(
   { connection: queryConnection },
 );
 
-new Worker(
+const notificationWorker = new Worker(
   QUEUE_NAMES.notification,
   async (job) => {
     if (job.name === "advisor-notify") {
@@ -121,12 +121,24 @@ new Worker(
   { connection: notificationConnection },
 );
 
+notificationWorker.on("failed", (job, err) => {
+  if (!job) return;
+  const attempts = job.attemptsMade ?? 0;
+  const maxAttempts = job.opts.attempts ?? DEFAULT_JOB_OPTIONS.attempts;
+  const terminal = attempts >= maxAttempts;
+  console.error(
+    `[jobs] notification ${job.name} jobId=${job.id} ${terminal ? "DLQ" : "retry"} attempt=${attempts}/${maxAttempts} reason=${err.message}`,
+  );
+});
+
 new Worker(
   QUEUE_NAMES.monitor,
   async () =>
     runMonitorTickProcessor({
       listMonitors: () =>
-        fetchJson("/api/monitors") as Promise<{ items: MonitorSummary[] }>,
+        fetchJson("/api/internal/monitors/due") as Promise<{
+          items: MonitorSummary[];
+        }>,
       checkMonitor: (id) =>
         fetchJson(`/api/internal/monitors/${id}/check`, {
           method: "POST",

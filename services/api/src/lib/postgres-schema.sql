@@ -58,17 +58,19 @@ CREATE TABLE IF NOT EXISTS leads (
 );
 
 CREATE TABLE IF NOT EXISTS monitors (
-  id                    TEXT PRIMARY KEY,
-  user_id               TEXT REFERENCES users(id) ON DELETE SET NULL,
-  target_kind           TEXT NOT NULL,
-  target_value          TEXT NOT NULL,
-  notify_email          TEXT,
-  notify_phone          TEXT,
-  status                TEXT NOT NULL,
-  last_preview_level    TEXT,
-  last_preview_summary  TEXT,
-  last_checked_at       TIMESTAMPTZ
+  id                     TEXT PRIMARY KEY,
+  user_id                TEXT REFERENCES users(id) ON DELETE SET NULL,
+  target_kind            TEXT NOT NULL,
+  target_value           TEXT NOT NULL,
+  notify_email           TEXT,
+  notify_phone           TEXT,
+  status                 TEXT NOT NULL,
+  last_preview_level     TEXT,
+  last_preview_summary   TEXT,
+  last_checked_at        TIMESTAMPTZ,
+  tick_interval_seconds  INTEGER
 );
+ALTER TABLE monitors ADD COLUMN IF NOT EXISTS tick_interval_seconds INTEGER;
 
 CREATE INDEX IF NOT EXISTS idx_monitors_user_id ON monitors(user_id);
 CREATE INDEX IF NOT EXISTS idx_monitors_status ON monitors(status);

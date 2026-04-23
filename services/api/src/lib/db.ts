@@ -139,6 +139,7 @@ function initializeSchema(db: QueryTaskDatabase) {
   ensureColumn(db, "monitors", "last_preview_level", "TEXT");
   ensureColumn(db, "monitors", "last_preview_summary", "TEXT");
   ensureColumn(db, "monitors", "last_checked_at", "TEXT");
+  ensureColumn(db, "monitors", "tick_interval_seconds", "INTEGER");
   ensureColumn(db, "query_tasks", "user_id", "TEXT");
   ensureColumn(db, "monitors", "user_id", "TEXT");
   ensureColumn(db, "leads", "user_id", "TEXT");

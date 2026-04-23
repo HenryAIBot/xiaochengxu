@@ -22,26 +22,22 @@ const LIVE_AUTH = process.env.USPTO_LIVE_TEST_AUTH_HEADER;
 describe.skipIf(!LIVE_URL)(
   "USPTO live connector smoke (requires USPTO_LIVE_TEST_URL_TEMPLATE)",
   () => {
-    it(
-      "returns an array of marks with recognizable fields",
-      async () => {
-        const connector = new LiveUsptoTrademarkConnector({
-          urlTemplate: LIVE_URL as string,
-          authHeader: LIVE_AUTH,
-        });
+    it("returns an array of marks with recognizable fields", async () => {
+      const connector = new LiveUsptoTrademarkConnector({
+        urlTemplate: LIVE_URL as string,
+        authHeader: LIVE_AUTH,
+      });
 
-        const result = await connector.searchMarks(LIVE_TERM);
-        expect(result).toHaveProperty("marks");
-        expect(Array.isArray(result.marks)).toBe(true);
-        // Can't assert specific counts — real world depends on the term.
-        // But if anything comes back, at least one recognizable field
-        // must be populated on each row.
-        for (const mark of result.marks.slice(0, 3)) {
-          expect(typeof mark).toBe("object");
-          expect(mark.owner || mark.mark).toBeTruthy();
-        }
-      },
-      30_000,
-    );
+      const result = await connector.searchMarks(LIVE_TERM);
+      expect(result).toHaveProperty("marks");
+      expect(Array.isArray(result.marks)).toBe(true);
+      // Can't assert specific counts — real world depends on the term.
+      // But if anything comes back, at least one recognizable field
+      // must be populated on each row.
+      for (const mark of result.marks.slice(0, 3)) {
+        expect(typeof mark).toBe("object");
+        expect(mark.owner || mark.mark).toBeTruthy();
+      }
+    }, 30_000);
   },
 );

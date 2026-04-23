@@ -19,6 +19,15 @@ export function createRedisConnection(redisUrl?: string): Redis {
   );
 }
 
+export interface FailedNotification {
+  jobId: string;
+  name: string;
+  data: unknown;
+  failedReason: string | null;
+  attemptsMade: number;
+  failedAt: number | null;
+}
+
 export interface QueueClient {
   enqueueQuery(payload: { taskId: string }): Promise<void>;
   enqueueNotification(payload: {
@@ -38,6 +47,8 @@ export interface QueueClient {
     targetRef: { kind: string; value: string } | null;
     sourceReportId: string | null;
   }): Promise<void>;
+  listFailedNotifications(limit?: number): Promise<FailedNotification[]>;
+  retryFailedNotification(jobId: string): Promise<{ retried: boolean }>;
   close(): Promise<void>;
 }
 
@@ -70,6 +81,25 @@ export function createQueueClient(
     },
     async enqueueAdvisorNotification(payload) {
       await notificationQueue.add("advisor-notify", payload);
+    },
+    async listFailedNotifications(limit = 50) {
+      const jobs = await notificationQueue.getFailed(0, Math.max(0, limit - 1));
+      return jobs.map((job) => ({
+        jobId: String(job.id ?? ""),
+        name: job.name,
+        data: job.data,
+        failedReason: job.failedReason ?? null,
+        attemptsMade: job.attemptsMade ?? 0,
+        failedAt: job.finishedOn ?? null,
+      }));
+    },
+    async retryFailedNotification(jobId) {
+      const job = await notificationQueue.getJob(jobId);
+      if (!job) return { retried: false };
+      const state = await job.getState();
+      if (state !== "failed") return { retried: false };
+      await job.retry();
+      return { retried: true };
     },
     async close() {
       await queryQueue.close();

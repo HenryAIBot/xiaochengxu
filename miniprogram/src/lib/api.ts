@@ -149,6 +149,7 @@ export async function createMonitor(input: {
   targetValue: string;
   notifyEmail?: string;
   notifyPhone?: string;
+  tickIntervalSeconds?: number;
 }) {
   const response = await Taro.request({
     url: `${API_BASE}/api/monitors`,
@@ -179,6 +180,8 @@ export interface MonitorListItem {
   notifyEmail?: string | null;
   notifyPhone?: string | null;
   status: string;
+  tickIntervalSeconds?: number | null;
+  lastCheckedAt?: string | null;
 }
 
 export async function listMonitors(): Promise<{ items: MonitorListItem[] }> {
@@ -200,6 +203,19 @@ export async function updateMonitorStatus(
     method: "PATCH",
     header: await buildAuthHeader({ contentType: true }),
     data: { status },
+  });
+  return response.data;
+}
+
+export async function updateMonitorInterval(
+  id: string,
+  tickIntervalSeconds: number,
+) {
+  const response = await Taro.request({
+    url: `${API_BASE}/api/monitors/${id}`,
+    method: "PATCH",
+    header: await buildAuthHeader({ contentType: true }),
+    data: { tickIntervalSeconds },
   });
   return response.data;
 }

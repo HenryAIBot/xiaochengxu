@@ -94,12 +94,15 @@ jobs:
           retention-days: 14
 
   docker-images:
-    name: Build API + Jobs images
+    name: Build + push API + Jobs images to GHCR
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Only build on main branch pushes (and manual runs) to keep PR CI fast.
+    # Only publish on main branch pushes (and manual runs) to keep PR CI fast.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [verify]
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - uses: actions/checkout@v4
@@ -107,26 +110,37 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build API image
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lowercase repo owner
+        id: repo
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Build + push API image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: services/api/Dockerfile
-          push: false
-          tags: xiaochengxu-api:${{ github.sha }}
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo.outputs.owner }}/xiaochengxu-api:${{ github.sha }}
+            ghcr.io/${{ steps.repo.outputs.owner }}/xiaochengxu-api:latest
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
-      - name: Build Jobs image
+      - name: Build + push Jobs image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: services/jobs/Dockerfile
-          push: false
-          tags: xiaochengxu-jobs:${{ github.sha }}
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo.outputs.owner }}/xiaochengxu-jobs:${{ github.sha }}
+            ghcr.io/${{ steps.repo.outputs.owner }}/xiaochengxu-jobs:latest
           cache-from: type=gha,scope=jobs
           cache-to: type=gha,mode=max,scope=jobs
-
-      # To enable actual publishing, configure a registry auth step (e.g.,
-      # docker/login-action@v3 with REGISTRY_USER / REGISTRY_TOKEN secrets)
-      # and flip `push: true` above plus add registry-qualified tags.
