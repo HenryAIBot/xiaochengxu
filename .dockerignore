@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+.git
+.github
+.vscode
+.idea
+.superpowers
+services/api/data
+*.sqlite
+*.log

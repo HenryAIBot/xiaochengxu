@@ -311,6 +311,29 @@ export async function createConsultation(input: {
   return payload as ConsultationItem;
 }
 
+export async function updateConsultation(
+  id: string,
+  patch: { status?: ConsultationItem["status"]; note?: string },
+): Promise<ConsultationItem> {
+  const response = await Taro.request({
+    url: `${API_BASE}/api/consultations/${id}`,
+    method: "PATCH",
+    header: await buildAuthHeader({ contentType: true }),
+    data: patch,
+  });
+  const payload = response.data as
+    | ConsultationItem
+    | { message?: string }
+    | null;
+  if (!payload || typeof (payload as ConsultationItem).id !== "string") {
+    const message =
+      (payload as { message?: string } | null)?.message ??
+      `更新咨询失败 (HTTP ${response.statusCode ?? "unknown"})`;
+    throw new Error(message);
+  }
+  return payload as ConsultationItem;
+}
+
 export async function listConsultations(): Promise<{
   items: ConsultationItem[];
 }> {

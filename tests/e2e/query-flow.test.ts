@@ -45,6 +45,7 @@ describe("query flow (end to end)", () => {
       enqueuedTaskIds.push(taskId);
     },
     async enqueueNotification() {},
+    async enqueueAdvisorNotification() {},
     async close() {},
   };
 

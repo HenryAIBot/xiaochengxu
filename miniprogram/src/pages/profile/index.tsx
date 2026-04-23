@@ -5,6 +5,7 @@ import {
   type ConsultationTargetRef,
   createConsultation,
   listConsultations,
+  updateConsultation,
 } from "../../lib/api";
 import {
   type ConsultationContext,
@@ -60,6 +61,29 @@ export default function ProfilePage() {
       // keep previous list silently; retry by resubmitting
     }
   }, []);
+
+  const nextStatus: Record<
+    string,
+    { status: ConsultationItem["status"]; label: string } | null
+  > = {
+    pending: { status: "in_progress", label: "标记处理中" },
+    assigned: { status: "in_progress", label: "标记处理中" },
+    in_progress: { status: "closed", label: "标记已完成" },
+    closed: null,
+    done: null,
+  };
+
+  async function advance(item: ConsultationItem) {
+    const next = nextStatus[item.status];
+    if (!next) return;
+    try {
+      await updateConsultation(item.id, { status: next.status });
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "更新失败");
+      setMessageTone("error");
+    }
+  }
 
   useEffect(() => {
     setContext(consumeConsultationContext());
@@ -219,6 +243,15 @@ export default function ProfilePage() {
                 ) : null}
                 {item.note ? (
                   <Text className="evidence-item__body">备注：{item.note}</Text>
+                ) : null}
+                {nextStatus[item.status] ? (
+                  <Button
+                    className="btn btn--ghost btn--compact"
+                    style={{ marginTop: "8px" }}
+                    onClick={() => void advance(item)}
+                  >
+                    {nextStatus[item.status]?.label}
+                  </Button>
                 ) : null}
               </View>
             ))

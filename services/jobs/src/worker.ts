@@ -5,6 +5,10 @@ import {
 } from "@xiaochengxu/queue";
 import { createDefaultToolExecutor } from "@xiaochengxu/tools";
 import { Queue, Worker } from "bullmq";
+import {
+  type AdvisorNotificationJob,
+  runAdvisorNotificationProcessor,
+} from "./processors/advisor-notification-processor.js";
 import { runMonitorProcessor } from "./processors/monitor-processor.js";
 import {
   type MonitorSummary,
@@ -99,12 +103,21 @@ new Worker(
 
 new Worker(
   QUEUE_NAMES.notification,
-  async (job) =>
-    runMonitorProcessor(job.data, {
+  async (job) => {
+    if (job.name === "advisor-notify") {
+      return runAdvisorNotificationProcessor(
+        job.data as AdvisorNotificationJob,
+        {
+          sendEmail,
+        },
+      );
+    }
+    return runMonitorProcessor(job.data, {
       sendEmail,
       sendSms,
       saveMessage: saveMessageViaApi,
-    }),
+    });
+  },
   { connection: notificationConnection },
 );
 

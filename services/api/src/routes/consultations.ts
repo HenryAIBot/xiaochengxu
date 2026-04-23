@@ -140,7 +140,29 @@ export async function registerConsultationRoutes(app: FastifyInstance) {
         )
         .run(record);
 
-      if (advisor) markAdvisorAssigned(app.db, advisor.id, now);
+      if (advisor) {
+        markAdvisorAssigned(app.db, advisor.id, now);
+        // Fire-and-forget advisor notification. Do not block the response
+        // on queue availability (fixes the async vs response-latency gap).
+        void app.queue
+          .enqueueAdvisorNotification({
+            consultationId: record.id,
+            advisorId: advisor.id,
+            advisorName: advisor.name,
+            advisorEmail: advisor.email,
+            clientName: record.name,
+            clientPhone: record.phone,
+            note: record.note,
+            targetRef: body.targetRef ?? null,
+            sourceReportId: record.sourceReportId,
+          })
+          .catch((error) => {
+            app.log?.warn?.(
+              { err: error, consultationId: record.id },
+              "failed to enqueue advisor notification",
+            );
+          });
+      }
 
       return reply.code(201).send({
         id: record.id,

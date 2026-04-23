@@ -13,6 +13,7 @@ function makeRecordingQueue(): { client: QueueClient; taskIds: string[] } {
         taskIds.push(taskId);
       },
       async enqueueNotification() {},
+      async enqueueAdvisorNotification() {},
       async close() {},
     },
   };

@@ -7,9 +7,24 @@ on:
 
 jobs:
   verify:
-    name: lint + test + build
+    name: lint + test + build (backend)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: xiaochengxu
+          POSTGRES_PASSWORD: dev-local
+          POSTGRES_DB: xiaochengxu
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U xiaochengxu -d xiaochengxu"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -31,12 +46,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Test
+      - name: Test (incl. Postgres smoke)
+        env:
+          DATABASE_URL_TEST: postgres://xiaochengxu:dev-local@127.0.0.1:5432/xiaochengxu
         run: pnpm test
 
       - name: Build backend packages
-        # Skip miniprogram build (Taro requires extra tooling & native binaries
-        # that slow CI significantly). Backend packages guarantee TS compiles.
         run: >-
           pnpm
           --filter @xiaochengxu/core
@@ -45,3 +60,73 @@ jobs:
           --filter @xiaochengxu/api
           --filter @xiaochengxu/jobs
           -r build
+
+  miniprogram-h5:
+    name: miniprogram H5 build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build H5 bundle
+        run: pnpm --filter @xiaochengxu/miniprogram build:h5
+
+      - name: Upload H5 dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: miniprogram-h5
+          path: miniprogram/dist
+          retention-days: 14
+
+  docker-images:
+    name: Build API + Jobs images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only build on main branch pushes (and manual runs) to keep PR CI fast.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [verify]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/api/Dockerfile
+          push: false
+          tags: xiaochengxu-api:${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build Jobs image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/jobs/Dockerfile
+          push: false
+          tags: xiaochengxu-jobs:${{ github.sha }}
+          cache-from: type=gha,scope=jobs
+          cache-to: type=gha,mode=max,scope=jobs
+
+      # To enable actual publishing, configure a registry auth step (e.g.,
+      # docker/login-action@v3 with REGISTRY_USER / REGISTRY_TOKEN secrets)
+      # and flip `push: true` above plus add registry-qualified tags.

@@ -27,6 +27,17 @@ export interface QueueClient {
     notifyPhone?: string | null;
     preview: { level: string; summary: string };
   }): Promise<void>;
+  enqueueAdvisorNotification(payload: {
+    consultationId: string;
+    advisorId: string;
+    advisorName: string;
+    advisorEmail: string | null;
+    clientName: string;
+    clientPhone: string;
+    note: string | null;
+    targetRef: { kind: string; value: string } | null;
+    sourceReportId: string | null;
+  }): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -56,6 +67,9 @@ export function createQueueClient(
     },
     async enqueueNotification(payload) {
       await notificationQueue.add("notify", payload);
+    },
+    async enqueueAdvisorNotification(payload) {
+      await notificationQueue.add("advisor-notify", payload);
     },
     async close() {
       await queryQueue.close();

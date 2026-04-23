@@ -4,6 +4,7 @@ import type { CourtListenerPort } from "./connectors/courtlistener-connector.js"
 import { FixtureAmazonListingConnector } from "./connectors/fixture-amazon-listing-connector.js";
 import { FixtureCourtListenerConnector } from "./connectors/fixture-courtlistener-connector.js";
 import { FixtureUsptoTrademarkConnector } from "./connectors/fixture-uspto-trademark-connector.js";
+import { LiveAmazonListingConnector } from "./connectors/live-amazon-listing-connector.js";
 import { LiveCourtListenerConnector } from "./connectors/live-courtlistener-connector.js";
 import { LiveUsptoTrademarkConnector } from "./connectors/live-uspto-trademark-connector.js";
 import { CaseProgressService } from "./services/case-progress-service.js";
@@ -100,9 +101,39 @@ export interface UsptoPort {
   }>;
 }
 
+export interface AmazonPort {
+  getListingHtml(asin: string): Promise<string>;
+  listStoreProducts?(
+    storeName: string,
+  ): Promise<{ items: Array<{ asin: string; title: string }> }>;
+}
+
 export interface ToolExecutorOverrides {
   courtListener?: { connector: CourtListenerPort; source: DataSource };
   uspto?: { connector: UsptoPort; source: DataSource };
+  amazon?: { connector: AmazonPort; source: DataSource };
+}
+
+export function resolveAmazonConnector(override?: {
+  connector: AmazonPort;
+  source: DataSource;
+}): { connector: AmazonPort; source: DataSource } {
+  if (override) return override;
+  const listingUrlTemplate = process.env.AMAZON_LISTING_URL_TEMPLATE;
+  if (listingUrlTemplate) {
+    return {
+      connector: new LiveAmazonListingConnector({
+        listingUrlTemplate,
+        storeUrlTemplate: process.env.AMAZON_STORE_URL_TEMPLATE,
+        authHeader: process.env.AMAZON_AUTH_HEADER,
+      }),
+      source: DATA_SOURCE_LIVE,
+    };
+  }
+  return {
+    connector: new FixtureAmazonListingConnector(),
+    source: DATA_SOURCE_FIXTURE,
+  };
 }
 
 export function resolveUsptoConnector(override?: {
@@ -185,8 +216,9 @@ export function createDefaultToolExecutor(config?: ToolExecutorConfig) {
   const usptoResolved = resolveUsptoConnector(config?.uspto);
   const uspto = usptoResolved.connector;
   const usptoSource = usptoResolved.source;
-  const amazon = new FixtureAmazonListingConnector();
-  const amazonSource: DataSource = DATA_SOURCE_FIXTURE;
+  const amazonResolved = resolveAmazonConnector(config?.amazon);
+  const amazon = amazonResolved.connector;
+  const amazonSource = amazonResolved.source;
 
   const troAlert = new TroAlertService(courtListener);
   const infringement = new InfringementCheckService({

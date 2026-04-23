@@ -24,11 +24,23 @@ function readInputValue(event: {
 export function HomeScreen({
   onSubmit,
 }: {
-  onSubmit(input: { tool: Tool; input: string }): void;
+  onSubmit(input: { tool: Tool; input: string }): Promise<unknown> | unknown;
 }) {
   const [tool, setTool] = useState<Tool>("infringement_check");
   const [value, setValue] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const trimmed = value.trim();
+  const disabled = !trimmed || submitting;
+
+  async function handleSubmit() {
+    if (disabled) return;
+    setSubmitting(true);
+    try {
+      await onSubmit({ tool, input: trimmed });
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <View>
@@ -68,13 +80,13 @@ export function HomeScreen({
           </View>
           <Button
             className={
-              trimmed
-                ? "btn btn--primary btn--block"
-                : "btn btn--primary btn--block btn--disabled"
+              disabled
+                ? "btn btn--primary btn--block btn--disabled"
+                : "btn btn--primary btn--block"
             }
-            onClick={() => onSubmit({ tool, input: trimmed })}
+            onClick={() => void handleSubmit()}
           >
-            立即检测
+            {submitting ? "检测中…" : "立即检测"}
           </Button>
           <Text className="hint">
             示例：nike、apple、B0C1234567、1:25-cv-01234

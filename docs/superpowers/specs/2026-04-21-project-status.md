@@ -270,3 +270,52 @@ xiaochengxu/
 - docker-compose api/jobs 编排（Postgres 服务已加，但应用本身还没 Dockerfile）
 
 **当前路由代码仍走 SQLite**。生产要上 Postgres 的路径：(a) 起 `docker compose up postgres` (b) `export DATABASE_URL=postgres://...` (c) `pnpm --filter @xiaochengxu/api db:migrate:pg` 建 schema (d) 下轮迭代把 routes 从 sqlite 切到 pg pool。
+
+### 21 轮（2026-04-24）：ABCDE 宽度一次打满
+
+**结论**：
+- 测试：158 → **164**（+6 本轮新增；4 个 Postgres smoke 仍然依赖 `DATABASE_URL_TEST`）
+- `pnpm lint` / `pnpm test` / `pnpm build` 全绿
+- 所有 5 个阶段都推进了一步；没有任何一个"完全做完"但每个都比之前更接近
+
+**A. D 收尾 · Dockerfile 就绪，routes→pg 仍未迁移**（partial）
+- `services/api/Dockerfile` / `services/jobs/Dockerfile` — 多阶段 alpine 构建，pnpm filter-install 让镜像层干净
+- `.dockerignore` 排除 node_modules/dist/sqlite/超级 pwr 日志
+- `docker-compose.yml` 增加 `api` / `jobs` 服务，默认 `profiles:["app"]` 不随 redis/pg 一起 up；env 透传 INTERNAL_API_TOKEN / WECHAT_* / SENTRY_DSN
+- ⚠️ 仍未做：把 route 代码的 `db.prepare().get/all/run` 切成 async 走 pg pool
+
+**B. 顾问链路闭合**（done）
+- `packages/queue` 增加 `enqueueAdvisorNotification`；`NoopQueueClient` 同步实现
+- `services/jobs/src/processors/advisor-notification-processor.ts` 渲染 HTML 邮件（客户 / 电话 / 咨询对象 / 备注 / 关联报告 / 咨询号）
+- `services/jobs/src/worker.ts` 的 notification worker 按 `job.name` 分发：`advisor-notify` → advisor processor，其他 → monitor processor
+- API `POST /api/consultations` 在成功 assign 顾问时 fire-and-forget 入队（`void app.queue.enqueueAdvisorNotification(...).catch(log)`，不阻塞请求）
+- 前端 `updateConsultation(id, patch)` + Profile 页每条记录底下的"标记处理中 / 标记已完成"按钮（pending/assigned → in_progress → closed）
+- 2 个新测试：advisor processor（有邮件发 / 无邮件静默）+ 1 个 API 测试（分配即入队，payload 形状正确）
+
+**C. 真数据 + 可观测**（mostly done）
+- `services/api/src/lib/error-reporter.ts` — `ErrorReporter` 接口 + `stderrReporter`（结构化 JSON 写 stderr）+ `createSentryReporter(sentryLike, dsn)` vendor-neutral 适配器
+- `buildApp({ errorReporter })` via `onError` hook，传 null 禁用，默认 stderr
+- `services/api/src/server.ts` 动态 `import("@sentry/node")`：SENTRY_DSN 设了 + SDK 装了才启用，否则静默 fallback —— API 包本身不依赖 `@sentry/node`，生产可选
+- `packages/tools/src/connectors/live-amazon-listing-connector.ts` + `resolveAmazonConnector()`：读 `AMAZON_LISTING_URL_TEMPLATE` / `AMAZON_STORE_URL_TEMPLATE` / `AMAZON_AUTH_HEADER` env 切 live；否则 fixture
+- `.env.example` 补齐 Amazon / Sentry 三组变量
+- 3 个新测试：error-reporter invoke / captureException forward / DSN 缺失不调用
+- ⚠️ 未做：USPTO 对真实端点做过一次真实 HTTP 调用（仍只有 mock fetch 测试）
+
+**D. CI + 部署流水线**（done）
+- `.github/workflows/ci.yml` 拆 3 个 job：
+  - `verify`：lint + test + backend build；**新增 Postgres service**（`postgres:17-alpine`），跑测时注入 `DATABASE_URL_TEST`，让之前 skipped 的 4 个 pg smoke 在 CI 也跑
+  - `miniprogram-h5`：Taro H5 build + `actions/upload-artifact` 保存 dist（14 天）
+  - `docker-images`：main 分支 push 后 Buildx 构建 api/jobs 镜像，GHA 缓存分 scope；当前 `push:false`，上架 registry 只需加 login-action + secrets + 翻成 `push:true`
+
+**E. UI 打磨**（partial）
+- `HomeScreen` 加 `submitting` 状态：按钮在请求期间禁用 + 文案切"检测中…"，`onSubmit` 支持 Promise 返回值
+- Profile 页每条咨询记录新增"标记处理中 / 标记已完成"按钮（归在 B.2 里）
+- E.2 结果页持久化：已有 `query-result-cache.ts` 完成
+- ⚠️ 仍未做：正式视觉设计二轮（色板 / 字号 / 间距细化）、解锁报告弹窗复用登录手机号
+
+**当前 TODO 剩余长尾**（会在下一轮汇报里列出）：
+- D-A.2：routes→pg 全量 async 迁移（最大一块）
+- C.4：USPTO 真 endpoint 实测
+- E.4：视觉设计二轮
+- #14：微信小程序真 appid + 体验版
+- #20：sean-server 上游 PR 合并

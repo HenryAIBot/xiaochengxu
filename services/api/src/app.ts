@@ -6,6 +6,7 @@ import {
   createInMemoryDb,
   createQueryTaskDatabase,
 } from "./lib/db.js";
+import { type ErrorReporter, stderrReporter } from "./lib/error-reporter.js";
 import { type RequestUser, resolveRequestUser } from "./lib/user-identity.js";
 import type { WeChatAuthConfig } from "./lib/wechat.js";
 import {
@@ -61,6 +62,13 @@ export interface BuildAppOptions {
    * token. Pass `fetch` to stub the upstream call in tests.
    */
   wechat?: WeChatAuthConfig | null;
+  /**
+   * Reporter for uncaught request errors. Defaults to a structured-JSON
+   * stderr writer. Wire in `createSentryReporter(Sentry, process.env.SENTRY_DSN)`
+   * from `./lib/error-reporter.js` to ship to Sentry without coupling
+   * this package to the Sentry SDK. Pass `null` to disable entirely.
+   */
+  errorReporter?: ErrorReporter | null;
 }
 
 export interface AuditLogEntry {
@@ -76,6 +84,7 @@ export function createNoopQueueClient(): QueueClient {
   return {
     async enqueueQuery() {},
     async enqueueNotification() {},
+    async enqueueAdvisorNotification() {},
     async close() {},
   };
 }
@@ -92,6 +101,10 @@ export function buildApp(options: BuildAppOptions = {}) {
           console.log(JSON.stringify({ kind: "audit", ...entry }));
         }
       : options.auditLog;
+  const errorReporter =
+    options.errorReporter === undefined
+      ? stderrReporter
+      : options.errorReporter;
   const app = Fastify();
 
   app.addHook("onRequest", async (request, reply) => {
@@ -130,6 +143,17 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.addHook("preHandler", async (request) => {
     request.user = resolveRequestUser(db, request);
   });
+
+  if (errorReporter) {
+    app.addHook("onError", async (request, _reply, error) => {
+      errorReporter({
+        error,
+        url: request.url,
+        method: request.method,
+        userId: request.user?.id ?? null,
+      });
+    });
+  }
 
   if (auditLog) {
     app.addHook("onRequest", async (request) => {

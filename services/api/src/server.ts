@@ -1,5 +1,34 @@
 import { createQueueClient, createRedisConnection } from "@xiaochengxu/queue";
 import { buildApp } from "./app.js";
+import { type ErrorReporter, stderrReporter } from "./lib/error-reporter.js";
+
+/**
+ * Build a Sentry reporter if `@sentry/node` is installed *and* SENTRY_DSN
+ * is set. The dynamic import keeps the SDK optional: if nobody runs
+ * `pnpm add @sentry/node` it simply falls back to stderr logging.
+ */
+async function buildProductionReporter(): Promise<ErrorReporter> {
+  const dsn = process.env.SENTRY_DSN;
+  if (!dsn) return stderrReporter;
+  try {
+    const Sentry = (await import(
+      /* @vite-ignore */ "@sentry/node" as string
+    )) as {
+      init: (opts: { dsn: string }) => void;
+      captureException: Parameters<
+        typeof import("./lib/error-reporter.js").createSentryReporter
+      >[0]["captureException"];
+    };
+    Sentry.init({ dsn });
+    const { createSentryReporter } = await import("./lib/error-reporter.js");
+    return createSentryReporter(Sentry, dsn);
+  } catch {
+    console.warn(
+      "[api] SENTRY_DSN is set but @sentry/node is not installed — falling back to stderr error reporting.",
+    );
+    return stderrReporter;
+  }
+}
 
 async function main() {
   const queue = createQueueClient();
@@ -31,6 +60,8 @@ async function main() {
     );
   }
 
+  const errorReporter = await buildProductionReporter();
+
   const app = buildApp({
     queue,
     internalToken,
@@ -40,6 +71,7 @@ async function main() {
       redis: rateLimitRedis,
     },
     wechat,
+    errorReporter,
   });
 
   try {

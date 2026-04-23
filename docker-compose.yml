@@ -3,6 +3,11 @@ services:
     image: redis:7.4-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   mailpit:
     image: axllent/mailpit:v1.20
@@ -25,6 +30,50 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    # Uncomment to enable; pulls image on `docker compose up --build api`.
+    profiles: ["app"]
+    environment:
+      API_PORT: "3000"
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_FROM: alerts@xiaochengxu.local
+      # Uncomment to switch to Postgres (run db:migrate:pg first):
+      # DATABASE_URL: postgres://xiaochengxu:dev-local@postgres:5432/xiaochengxu
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev-internal-secret}
+      WECHAT_APPID: ${WECHAT_APPID:-}
+      WECHAT_SECRET: ${WECHAT_SECRET:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  jobs:
+    build:
+      context: .
+      dockerfile: services/jobs/Dockerfile
+    profiles: ["app"]
+    environment:
+      REDIS_URL: redis://redis:6379
+      API_BASE_URL: http://api:3000
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_FROM: alerts@xiaochengxu.local
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev-internal-secret}
+      MONITOR_TICK_INTERVAL_MS: "300000"
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
 
 volumes:
   postgres_data:

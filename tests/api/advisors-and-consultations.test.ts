@@ -1,5 +1,21 @@
-import { afterEach, describe, expect, it } from "vitest";
+import type { QueueClient } from "@xiaochengxu/queue";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp, createInMemoryDb } from "../../services/api/src/app.js";
+
+function makeSpyQueue(): { queue: QueueClient; calls: unknown[] } {
+  const calls: unknown[] = [];
+  return {
+    calls,
+    queue: {
+      async enqueueQuery() {},
+      async enqueueNotification() {},
+      async enqueueAdvisorNotification(payload) {
+        calls.push(payload);
+      },
+      async close() {},
+    },
+  };
+}
 
 describe("advisors + consultation routing", () => {
   let db = createInMemoryDb();
@@ -145,6 +161,32 @@ describe("advisors + consultation routing", () => {
     expect(patched.statusCode).toBe(200);
     expect(patched.json().status).toBe("closed");
     expect(patched.json().note).toBe("already handled");
+  });
+
+  it("enqueues an advisor notification when a consultation auto-assigns", async () => {
+    const spy = makeSpyQueue();
+    app = buildApp({ db, queue: spy.queue });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/consultations",
+      payload: {
+        name: "Zhang",
+        phone: "+8615279825102",
+        targetRef: { kind: "brand", value: "nike" },
+        sourceReportId: "report-xyz",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    // Give the fire-and-forget `void` call a tick to run.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(spy.calls.length).toBe(1);
+    const payload = spy.calls[0] as Record<string, unknown>;
+    expect(payload.advisorId).toBe(body.advisorId);
+    expect(payload.consultationId).toBe(body.id);
+    expect(payload.clientName).toBe("Zhang");
+    expect(payload.targetRef).toEqual({ kind: "brand", value: "nike" });
+    expect(payload.sourceReportId).toBe("report-xyz");
   });
 
   it("POST /api/internal/advisors requires the shared secret when configured", async () => {

@@ -9,6 +9,7 @@ function makeRecordingQueue() {
     async enqueueNotification(payload) {
       notifications.push(payload);
     },
+    async enqueueAdvisorNotification() {},
     async close() {},
   };
   return { client, notifications };
