@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS query_tasks (
   tool              TEXT NOT NULL,
   input_kind        TEXT NOT NULL,
   raw_input         TEXT NOT NULL,
-  normalized_input  JSONB NOT NULL,
+  -- Stored as the normalized string (e.g., "nike"), not a JSON object, so keep TEXT.
+  normalized_input  TEXT NOT NULL,
   status            TEXT NOT NULL,
   failure_reason    TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),

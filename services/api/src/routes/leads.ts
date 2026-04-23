@@ -34,7 +34,7 @@ export async function registerLeadRoutes(app: FastifyInstance) {
         userId: request.user?.id ?? null,
       };
 
-      app.db
+      await app.db
         .prepare(
           `INSERT INTO leads (
             id, email, phone, source_report_id, source_task_id, source_tool, source_input, created_at, user_id

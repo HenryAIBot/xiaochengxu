@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { NormalizedInput, ToolName } from "@xiaochengxu/core";
-import type { QueryTaskDatabase } from "../lib/db.js";
+import type { DatabaseAdapter } from "../lib/db-adapter.js";
 
 export interface QueryTaskRecord {
   id: string;
@@ -14,14 +14,14 @@ export interface QueryTaskRecord {
 }
 
 export class QueryTaskRepository {
-  constructor(private readonly db: QueryTaskDatabase) {}
+  constructor(private readonly db: DatabaseAdapter) {}
 
-  create(input: {
+  async create(input: {
     tool: ToolName;
     rawInput: string;
     normalizedInput: NormalizedInput;
     userId?: string | null;
-  }): QueryTaskRecord {
+  }): Promise<QueryTaskRecord> {
     const record: QueryTaskRecord = {
       id: randomUUID(),
       tool: input.tool,
@@ -33,7 +33,7 @@ export class QueryTaskRepository {
       userId: input.userId ?? null,
     };
 
-    this.db
+    await this.db
       .prepare(
         `INSERT INTO query_tasks (id, tool, input_kind, raw_input, normalized_input, status, created_at, user_id)
          VALUES (@id, @tool, @inputKind, @rawInput, @normalizedInput, @status, @createdAt, @userId)`,
@@ -43,8 +43,8 @@ export class QueryTaskRepository {
     return record;
   }
 
-  updateStatus(id: string, status: string) {
-    this.db
+  async updateStatus(id: string, status: string): Promise<void> {
+    await this.db
       .prepare("UPDATE query_tasks SET status = ? WHERE id = ?")
       .run(status, id);
   }

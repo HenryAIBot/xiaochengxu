@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import type { QueryTaskDatabase } from "../lib/db.js";
+import type { DatabaseAdapter } from "../lib/db-adapter.js";
 
 export interface AdvisorRow {
   id: string;
@@ -13,54 +13,52 @@ export interface AdvisorRow {
   last_assigned_at: string | null;
 }
 
-export function listActiveAdvisors(db: QueryTaskDatabase): AdvisorRow[] {
+export async function listActiveAdvisors(
+  db: DatabaseAdapter,
+): Promise<AdvisorRow[]> {
+  // NULLs-first ordering: advisors who've never been assigned go first.
+  // Both sqlite and postgres support "ORDER BY col ASC NULLS FIRST".
   return db
     .prepare(
       `SELECT id, name, phone, email, specialty, active, created_at, last_assigned_at
-       FROM advisors WHERE active = 1
-       ORDER BY COALESCE(last_assigned_at, '') ASC, created_at ASC`,
+       FROM advisors WHERE active
+       ORDER BY last_assigned_at ASC NULLS FIRST, created_at ASC`,
     )
-    .all() as AdvisorRow[];
+    .all<AdvisorRow>();
 }
 
-/**
- * Pick the next advisor using least-recently-assigned ordering (simple
- * round-robin). Returns null when no active advisor exists.
- */
-export function pickNextAdvisor(db: QueryTaskDatabase): AdvisorRow | null {
-  const advisors = listActiveAdvisors(db);
+export async function pickNextAdvisor(
+  db: DatabaseAdapter,
+): Promise<AdvisorRow | null> {
+  const advisors = await listActiveAdvisors(db);
   return advisors[0] ?? null;
 }
 
-export function markAdvisorAssigned(
-  db: QueryTaskDatabase,
+export async function markAdvisorAssigned(
+  db: DatabaseAdapter,
   advisorId: string,
   at: string,
-) {
-  db.prepare("UPDATE advisors SET last_assigned_at = ? WHERE id = ?").run(
-    at,
-    advisorId,
-  );
+): Promise<void> {
+  await db
+    .prepare("UPDATE advisors SET last_assigned_at = ? WHERE id = ?")
+    .run(at, advisorId);
 }
 
-/**
- * Seed a couple of advisors when the table is empty. Runs once at app boot
- * so a fresh dev DB has at least one assignable advisor; production can
- * replace these via POST /api/internal/advisors.
- */
-export function seedDefaultAdvisors(db: QueryTaskDatabase) {
-  const existing = db.prepare("SELECT COUNT(*) AS n FROM advisors").get() as {
-    n: number;
-  };
-  if (existing.n > 0) return;
+export async function seedDefaultAdvisors(db: DatabaseAdapter): Promise<void> {
+  const existing = await db
+    .prepare("SELECT COUNT(*) AS n FROM advisors")
+    .get<{ n: number }>();
+  if (!existing || existing.n > 0) return;
   const now = new Date().toISOString();
-  const rows: Array<Omit<AdvisorRow, "active" | "last_assigned_at">> = [
+  const activeFlag = db.dialect === "postgres" ? true : 1;
+  const rows = [
     {
       id: randomUUID(),
       name: "陈顾问",
       phone: "+8613800000001",
       email: "chen@advisor.example",
       specialty: "侵权应诉 / TRO 冻结",
+      active: activeFlag,
       created_at: now,
     },
     {
@@ -69,23 +67,23 @@ export function seedDefaultAdvisors(db: QueryTaskDatabase) {
       phone: "+8613800000002",
       email: "lin@advisor.example",
       specialty: "商标授权 / 品牌备案",
+      active: activeFlag,
       created_at: now,
     },
   ];
   const insert = db.prepare(
     `INSERT INTO advisors (id, name, phone, email, specialty, active, created_at)
-     VALUES (@id, @name, @phone, @email, @specialty, 1, @created_at)`,
+     VALUES (@id, @name, @phone, @email, @specialty, @active, @created_at)`,
   );
-  for (const row of rows) insert.run(row);
+  for (const row of rows) await insert.run(row);
 }
 
 export async function registerAdvisorRoutes(app: FastifyInstance) {
   app.get("/api/advisors", async () => {
-    const items = listActiveAdvisors(app.db).map((row) => ({
+    const items = (await listActiveAdvisors(app.db)).map((row) => ({
       id: row.id,
       name: row.name,
       specialty: row.specialty,
-      // Phone/email intentionally omitted — frontend contacts via consultation only.
     }));
     return { items };
   });
@@ -128,12 +126,13 @@ export async function registerAdvisorRoutes(app: FastifyInstance) {
         phone: request.body.phone ?? null,
         email: request.body.email ?? null,
         specialty: request.body.specialty ?? null,
+        active: app.db.dialect === "postgres" ? true : 1,
         created_at: new Date().toISOString(),
       };
-      app.db
+      await app.db
         .prepare(
           `INSERT INTO advisors (id, name, phone, email, specialty, active, created_at)
-           VALUES (@id, @name, @phone, @email, @specialty, 1, @created_at)`,
+           VALUES (@id, @name, @phone, @email, @specialty, @active, @created_at)`,
         )
         .run(row);
       return reply.code(201).send({

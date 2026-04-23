@@ -109,7 +109,7 @@ export async function registerConsultationRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const body = request.body as CreateConsultationBody;
       const now = new Date().toISOString();
-      const advisor = pickNextAdvisor(app.db);
+      const advisor = await pickNextAdvisor(app.db);
       const record = {
         id: randomUUID(),
         userId: request.user?.id ?? null,
@@ -126,7 +126,7 @@ export async function registerConsultationRoutes(app: FastifyInstance) {
         createdAt: now,
       };
 
-      app.db
+      await app.db
         .prepare(
           `INSERT INTO consultations (
              id, user_id, name, phone, note, status, advisor, advisor_id,
@@ -141,7 +141,7 @@ export async function registerConsultationRoutes(app: FastifyInstance) {
         .run(record);
 
       if (advisor) {
-        markAdvisorAssigned(app.db, advisor.id, now);
+        await markAdvisorAssigned(app.db, advisor.id, now);
         // Fire-and-forget advisor notification. Do not block the response
         // on queue availability (fixes the async vs response-latency gap).
         void app.queue
@@ -185,10 +185,9 @@ export async function registerConsultationRoutes(app: FastifyInstance) {
     const userId = request.user?.id ?? null;
     const whereClause = userId === null ? "c.user_id IS NULL" : "c.user_id = ?";
     const params = userId === null ? [] : [userId];
-    const items = (
-      app.db
-        .prepare(
-          `SELECT c.id, c.name, c.phone, c.note, c.status, c.advisor,
+    const rows = await app.db
+      .prepare(
+        `SELECT c.id, c.name, c.phone, c.note, c.status, c.advisor,
                 c.advisor_id, c.target_ref_kind, c.target_ref_value,
                 c.source_report_id, c.source_query_task_id,
                 c.created_at, c.updated_at,
@@ -197,10 +196,9 @@ export async function registerConsultationRoutes(app: FastifyInstance) {
          LEFT JOIN advisors a ON a.id = c.advisor_id
          WHERE ${whereClause}
          ORDER BY c.created_at DESC`,
-        )
-        .all(...params) as ConsultationRow[]
-    ).map(hydrate);
-    return { items };
+      )
+      .all<ConsultationRow>(...params);
+    return { items: rows.map(hydrate) };
   });
 
   app.patch<{ Params: { id: string }; Body: PatchConsultationBody }>(
@@ -210,9 +208,9 @@ export async function registerConsultationRoutes(app: FastifyInstance) {
       const userId = request.user?.id ?? null;
       const whereUser = userId === null ? "user_id IS NULL" : "user_id = ?";
       const params = userId === null ? [] : [userId];
-      const row = app.db
+      const row = await app.db
         .prepare(`SELECT id FROM consultations WHERE id = ? AND ${whereUser}`)
-        .get(request.params.id, ...params) as { id: string } | undefined;
+        .get<{ id: string }>(request.params.id, ...params);
       if (!row) return reply.code(404).send({ error: "not_found" });
 
       const now = new Date().toISOString();
@@ -227,11 +225,11 @@ export async function registerConsultationRoutes(app: FastifyInstance) {
         values.push(request.body.note);
       }
       values.push(request.params.id);
-      app.db
+      await app.db
         .prepare(`UPDATE consultations SET ${sets.join(", ")} WHERE id = ?`)
         .run(...values);
 
-      const updated = app.db
+      const updated = await app.db
         .prepare(
           `SELECT c.id, c.name, c.phone, c.note, c.status, c.advisor,
                   c.advisor_id, c.target_ref_kind, c.target_ref_value,
@@ -242,7 +240,8 @@ export async function registerConsultationRoutes(app: FastifyInstance) {
            LEFT JOIN advisors a ON a.id = c.advisor_id
            WHERE c.id = ?`,
         )
-        .get(request.params.id) as ConsultationRow;
+        .get<ConsultationRow>(request.params.id);
+      if (!updated) return reply.code(404).send({ error: "not_found" });
       return reply.send(hydrate(updated));
     },
   );

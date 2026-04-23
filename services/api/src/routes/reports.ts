@@ -11,10 +11,10 @@ interface StoredReportRow {
   taskId: string;
   level: string;
   summary: string;
-  evidenceJson: string;
-  recommendedActionsJson: string;
-  extraJson: string | null;
-  unlocked: number;
+  evidenceJson: unknown;
+  recommendedActionsJson: unknown;
+  extraJson: unknown;
+  unlocked: number | boolean;
   tool: string;
   inputKind: string;
   rawInput: string;
@@ -25,11 +25,9 @@ interface StoredReportRow {
   reportCreatedAt: string | null;
 }
 
-function parseJsonField<T>(value: string | null, fallback: T): T {
-  if (!value) {
-    return fallback;
-  }
-
+function parseJsonField<T>(value: unknown, fallback: T): T {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value !== "string") return value as T;
   try {
     return JSON.parse(value) as T;
   } catch {
@@ -37,30 +35,30 @@ function parseJsonField<T>(value: string | null, fallback: T): T {
   }
 }
 
-function getReport(app: FastifyInstance, reportId: string) {
+async function fetchReport(app: FastifyInstance, reportId: string) {
   return app.db
     .prepare(
       `SELECT reports.id,
-              reports.task_id AS taskId,
+              reports.task_id AS "taskId",
               reports.level,
               reports.summary,
-              reports.evidence_json AS evidenceJson,
-              reports.recommended_actions_json AS recommendedActionsJson,
-              reports.extra_json AS extraJson,
+              reports.evidence_json AS "evidenceJson",
+              reports.recommended_actions_json AS "recommendedActionsJson",
+              reports.extra_json AS "extraJson",
               reports.unlocked,
               query_tasks.tool,
-              query_tasks.input_kind AS inputKind,
-              query_tasks.raw_input AS rawInput,
-              query_tasks.normalized_input AS normalizedInput,
-              query_tasks.created_at AS createdAt,
-              query_tasks.user_id AS taskUserId,
-              reports.data_source AS dataSource,
-              reports.created_at AS reportCreatedAt
+              query_tasks.input_kind AS "inputKind",
+              query_tasks.raw_input AS "rawInput",
+              query_tasks.normalized_input AS "normalizedInput",
+              query_tasks.created_at AS "createdAt",
+              query_tasks.user_id AS "taskUserId",
+              reports.data_source AS "dataSource",
+              reports.created_at AS "reportCreatedAt"
        FROM reports
        INNER JOIN query_tasks ON query_tasks.id = reports.task_id
        WHERE reports.id = ?`,
     )
-    .get(reportId) as StoredReportRow | undefined;
+    .get<StoredReportRow>(reportId);
 }
 
 function canAccessReport(
@@ -70,10 +68,14 @@ function canAccessReport(
   return !!report && report.taskUserId === userId;
 }
 
+function isUnlocked(value: number | boolean): boolean {
+  return value === true || value === 1;
+}
+
 function serializeReport(row: StoredReportRow) {
   return {
     id: row.id,
-    unlocked: row.unlocked === 1,
+    unlocked: isUnlocked(row.unlocked),
     query: {
       taskId: row.taskId,
       tool: row.tool,
@@ -100,7 +102,7 @@ function serializeReport(row: StoredReportRow) {
 export async function registerReportRoutes(app: FastifyInstance) {
   app.get("/api/reports/:reportId", async (request, reply) => {
     const { reportId } = request.params as { reportId: string };
-    const report = getReport(app, reportId);
+    const report = await fetchReport(app, reportId);
     const userId = request.user?.id ?? null;
 
     if (!canAccessReport(report, userId)) {
@@ -115,7 +117,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
 
   app.post("/api/reports/:reportId/unlock", async (request, reply) => {
     const { reportId } = request.params as { reportId: string };
-    const report = getReport(app, reportId);
+    const report = await fetchReport(app, reportId);
     const userId = request.user?.id ?? null;
 
     if (!canAccessReport(report, userId)) {
@@ -136,7 +138,7 @@ export async function registerReportRoutes(app: FastifyInstance) {
       });
     }
 
-    app.db
+    await app.db
       .prepare(
         `INSERT INTO leads (
           id, email, phone, source_report_id, source_task_id, source_tool, source_input, created_at, user_id
@@ -154,9 +156,10 @@ export async function registerReportRoutes(app: FastifyInstance) {
         request.user?.id ?? null,
       );
 
-    app.db
-      .prepare("UPDATE reports SET unlocked = 1 WHERE id = ?")
-      .run(reportId);
+    const unlockedValue = app.db.dialect === "postgres" ? true : 1;
+    await app.db
+      .prepare("UPDATE reports SET unlocked = ? WHERE id = ?")
+      .run(unlockedValue, reportId);
 
     return {
       id: reportId,

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildApp } from "../../services/api/src/app.js";
+import type { SqliteAdapter } from "../../services/api/src/lib/db-adapter.js";
 import { resolveDefaultQueryTaskDatabasePath } from "../../services/api/src/lib/db.js";
 
 describe("query task database path", () => {
@@ -28,7 +29,8 @@ describe("query task database path", () => {
     const app = buildApp();
 
     try {
-      expect(app.db.name).toBe(defaultDbPath);
+      const underlying = (app.db as SqliteAdapter).getUnderlying();
+      expect(underlying.name).toBe(defaultDbPath);
     } finally {
       await app.close();
     }
@@ -36,9 +38,10 @@ describe("query task database path", () => {
 
   it("closes the owned file-backed database when the app closes", async () => {
     const app = buildApp();
+    const underlying = (app.db as SqliteAdapter).getUnderlying();
 
     await app.close();
 
-    expect(() => app.db.prepare("SELECT 1")).toThrow();
+    expect(() => underlying.prepare("SELECT 1")).toThrow();
   });
 });

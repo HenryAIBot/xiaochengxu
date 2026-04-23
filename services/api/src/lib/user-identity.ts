@@ -1,5 +1,5 @@
 import type { FastifyRequest } from "fastify";
-import type { QueryTaskDatabase } from "./db.js";
+import type { DatabaseAdapter } from "./db-adapter.js";
 
 export interface RequestUser {
   id: string;
@@ -15,23 +15,22 @@ function parseBearerToken(
   return match?.[1]?.trim() || null;
 }
 
-export function resolveRequestUser(
-  db: QueryTaskDatabase,
+export async function resolveRequestUser(
+  db: DatabaseAdapter,
   request: FastifyRequest,
-): RequestUser | null {
+): Promise<RequestUser | null> {
   const token = parseBearerToken(request.headers.authorization);
   if (!token) return null;
 
-  const row = db.prepare("SELECT id FROM users WHERE token = ?").get(token) as
-    | { id: string }
-    | undefined;
+  const row = await db
+    .prepare("SELECT id FROM users WHERE token = ?")
+    .get<{ id: string }>(token);
 
   if (!row) return null;
 
-  db.prepare("UPDATE users SET last_seen_at = ? WHERE id = ?").run(
-    new Date().toISOString(),
-    row.id,
-  );
+  await db
+    .prepare("UPDATE users SET last_seen_at = ? WHERE id = ?")
+    .run(new Date().toISOString(), row.id);
 
   return { id: row.id };
 }

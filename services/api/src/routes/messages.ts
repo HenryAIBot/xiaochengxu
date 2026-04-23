@@ -29,16 +29,13 @@ const createMessageSchema: FastifySchema = {
 export async function registerMessageRoutes(app: FastifyInstance) {
   app.get("/api/messages", async (request) => {
     const userId = request.user?.id ?? null;
-    // Messages are scoped by the owning monitor's user_id. System messages with
-    // monitor_id NULL, or messages for monitors that no longer exist, are treated
-    // as "anonymous" and visible only to unauthenticated callers.
     const baseSelect = `SELECT m.id,
              m.channel,
              m.body,
-             m.monitor_id AS monitorId,
+             m.monitor_id AS "monitorId",
              m.level,
-             m.to_address AS toAddress,
-             m.created_at AS createdAt
+             m.to_address AS "toAddress",
+             m.created_at AS "createdAt"
       FROM messages m
       LEFT JOIN monitors mo ON mo.id = m.monitor_id`;
 
@@ -77,7 +74,7 @@ export async function registerMessageRoutes(app: FastifyInstance) {
         createdAt: new Date().toISOString(),
       };
 
-      app.db
+      await app.db
         .prepare(
           `INSERT INTO messages (id, channel, body, monitor_id, level, to_address, created_at)
            VALUES (@id, @channel, @body, @monitorId, @level, @toAddress, @createdAt)`,

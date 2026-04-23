@@ -5,10 +5,6 @@ import {
 } from "@xiaochengxu/tools";
 import type { FastifyInstance } from "fastify";
 
-// NOTE: these endpoints are called by the jobs worker inside the trust
-// boundary. Production should move them behind an auth middleware or
-// unix socket once a gateway exists.
-
 interface WorkerResultBody {
   report?: {
     level: string;
@@ -48,23 +44,21 @@ export async function registerInternalRoutes(app: FastifyInstance) {
 
   app.get("/api/internal/query-tasks/:taskId/raw", async (request, reply) => {
     const { taskId } = request.params as { taskId: string };
-    const row = app.db
+    const row = await app.db
       .prepare(
-        `SELECT id, tool, input_kind AS inputKind, raw_input AS rawInput,
-                normalized_input AS normalizedInput, status, created_at AS createdAt
+        `SELECT id, tool, input_kind AS "inputKind", raw_input AS "rawInput",
+                normalized_input AS "normalizedInput", status, created_at AS "createdAt"
          FROM query_tasks WHERE id = ?`,
       )
-      .get(taskId) as
-      | {
-          id: string;
-          tool: string;
-          inputKind: string;
-          rawInput: string;
-          normalizedInput: string;
-          status: string;
-          createdAt: string;
-        }
-      | undefined;
+      .get<{
+        id: string;
+        tool: string;
+        inputKind: string;
+        rawInput: string;
+        normalizedInput: string;
+        status: string;
+        createdAt: string;
+      }>(taskId);
     if (!row) {
       return reply.code(404).send({ error: "task not found" });
     }
@@ -86,9 +80,9 @@ export async function registerInternalRoutes(app: FastifyInstance) {
       const { taskId } = request.params as { taskId: string };
       const body = request.body as WorkerResultBody | undefined;
 
-      const task = app.db
+      const task = await app.db
         .prepare("SELECT id, status FROM query_tasks WHERE id = ?")
-        .get(taskId) as { id: string; status: string } | undefined;
+        .get<{ id: string; status: string }>(taskId);
 
       if (!task) {
         return reply.code(404).send({ error: "task not found" });
@@ -97,7 +91,7 @@ export async function registerInternalRoutes(app: FastifyInstance) {
       const now = new Date().toISOString();
 
       if (body?.error) {
-        app.db
+        await app.db
           .prepare(
             "UPDATE query_tasks SET status = 'failed', failure_reason = ?, updated_at = ? WHERE id = ?",
           )
@@ -111,14 +105,15 @@ export async function registerInternalRoutes(app: FastifyInstance) {
 
       const report = body.report;
       const reportId = randomUUID();
+      const unlocked = app.db.dialect === "postgres" ? false : 0;
 
-      app.db
+      await app.db
         .prepare(
           `INSERT INTO reports (
             id, task_id, level, summary, evidence_json,
             recommended_actions_json, extra_json, unlocked,
             data_source, created_at, source_fetched_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           reportId,
@@ -128,12 +123,13 @@ export async function registerInternalRoutes(app: FastifyInstance) {
           JSON.stringify(report.evidence ?? []),
           JSON.stringify(report.recommendedActions ?? []),
           report.extra ? JSON.stringify(report.extra) : null,
+          unlocked,
           report.dataSource ?? "fixture",
           now,
           report.sourceFetchedAt ?? now,
         );
 
-      app.db
+      await app.db
         .prepare(
           "UPDATE query_tasks SET status = 'completed', updated_at = ? WHERE id = ?",
         )
@@ -147,18 +143,18 @@ export async function registerInternalRoutes(app: FastifyInstance) {
     "/api/internal/monitors/:monitorId/check",
     async (request, reply) => {
       const { monitorId } = request.params as { monitorId: string };
-      const monitor = app.db
+      const monitor = await app.db
         .prepare(
           `SELECT id,
-                  target_kind AS targetKind,
-                  target_value AS targetValue,
-                  notify_email AS notifyEmail,
-                  notify_phone AS notifyPhone,
+                  target_kind AS "targetKind",
+                  target_value AS "targetValue",
+                  notify_email AS "notifyEmail",
+                  notify_phone AS "notifyPhone",
                   status,
-                  last_preview_level AS lastPreviewLevel
+                  last_preview_level AS "lastPreviewLevel"
            FROM monitors WHERE id = ?`,
         )
-        .get(monitorId) as MonitorRow | undefined;
+        .get<MonitorRow>(monitorId);
 
       if (!monitor) {
         return reply.code(404).send({ error: "monitor not found" });
@@ -178,7 +174,7 @@ export async function registerInternalRoutes(app: FastifyInstance) {
       });
 
       const now = new Date().toISOString();
-      app.db
+      await app.db
         .prepare(
           `UPDATE monitors
            SET last_preview_level = ?, last_preview_summary = ?, last_checked_at = ?

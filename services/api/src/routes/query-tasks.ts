@@ -55,27 +55,34 @@ interface ReportRow {
   task_id: string;
   level: string;
   summary: string;
-  evidence_json: string;
-  recommended_actions_json: string;
-  extra_json: string | null;
-  unlocked: number;
+  evidence_json: unknown;
+  recommended_actions_json: unknown;
+  extra_json: unknown;
+  unlocked: number | boolean;
   data_source: string | null;
   created_at: string | null;
   source_fetched_at: string | null;
 }
 
-function parseJsonArray(raw: string | null | undefined): unknown[] {
+// JSON columns land as strings in sqlite (stored as TEXT) and as
+// parsed objects in postgres (stored as JSONB). Accept either shape.
+function parseJsonArray(raw: unknown): unknown[] {
   if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   }
+  return [];
 }
 
-function parseJsonValue(raw: string | null | undefined): unknown {
-  if (!raw) return null;
+function parseJsonValue(raw: unknown): unknown {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== "string") return raw;
   try {
     return JSON.parse(raw);
   } catch {
@@ -107,7 +114,7 @@ export async function registerQueryTaskRoutes(app: FastifyInstance) {
       throw error;
     }
 
-    const task = repository.create({
+    const task = await repository.create({
       tool: request.body.tool,
       rawInput: request.body.input,
       normalizedInput,
@@ -126,26 +133,26 @@ export async function registerQueryTaskRoutes(app: FastifyInstance) {
   app.get("/api/query-tasks/:taskId", async (request, reply) => {
     const { taskId } = request.params as { taskId: string };
     const userId = request.user?.id ?? null;
-    const row = app.db
+    const row = await app.db
       .prepare(
         `SELECT id, tool, input_kind, raw_input, normalized_input, status,
                 created_at, updated_at, failure_reason, user_id
          FROM query_tasks WHERE id = ?`,
       )
-      .get(taskId) as (QueryTaskRow & { user_id: string | null }) | undefined;
+      .get<QueryTaskRow & { user_id: string | null }>(taskId);
 
     if (!row || row.user_id !== userId) {
       return reply.code(404).send({ error: "task not found" });
     }
 
-    const report = app.db
+    const report = await app.db
       .prepare(
         `SELECT id, task_id, level, summary, evidence_json,
                 recommended_actions_json, extra_json, unlocked, data_source,
                 created_at, source_fetched_at
          FROM reports WHERE task_id = ?`,
       )
-      .get(taskId) as ReportRow | undefined;
+      .get<ReportRow>(taskId);
 
     const base = {
       taskId: row.id,

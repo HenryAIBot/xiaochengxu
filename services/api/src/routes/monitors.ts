@@ -48,17 +48,20 @@ export async function registerMonitorRoutes(app: FastifyInstance) {
     const userId = request.user?.id ?? null;
     const whereClause = userId === null ? "user_id IS NULL" : "user_id = ?";
     const params = userId === null ? [] : [userId];
-    const items = app.db
+    // `rowid` is sqlite-specific; use created_at if available else id to keep
+    // Postgres happy. Monitors don't have created_at yet — fall back to id.
+    const orderColumn = app.db.dialect === "postgres" ? "id" : "rowid";
+    const items = await app.db
       .prepare(
         `SELECT id,
-                target_kind AS targetKind,
-                target_value AS targetValue,
-                notify_email AS notifyEmail,
-                notify_phone AS notifyPhone,
+                target_kind AS "targetKind",
+                target_value AS "targetValue",
+                notify_email AS "notifyEmail",
+                notify_phone AS "notifyPhone",
                 status
          FROM monitors
          WHERE ${whereClause}
-         ORDER BY rowid DESC`,
+         ORDER BY ${orderColumn} DESC`,
       )
       .all(...params);
 
@@ -80,7 +83,7 @@ export async function registerMonitorRoutes(app: FastifyInstance) {
         userId: request.user?.id ?? null,
       };
 
-      app.db
+      await app.db
         .prepare(
           `INSERT INTO monitors (id, target_kind, target_value, notify_email, notify_phone, status, user_id)
            VALUES (@id, @targetKind, @targetValue, @notifyEmail, @notifyPhone, @status, @userId)`,
@@ -104,14 +107,14 @@ export async function registerMonitorRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params as { id: string };
       const userId = request.user?.id ?? null;
-      const row = app.db
-        .prepare("SELECT id, user_id AS userId FROM monitors WHERE id = ?")
-        .get(id) as { id: string; userId: string | null } | undefined;
+      const row = await app.db
+        .prepare('SELECT id, user_id AS "userId" FROM monitors WHERE id = ?')
+        .get<{ id: string; userId: string | null }>(id);
       if (!row || row.userId !== userId) {
         return reply.code(404).send({ error: "monitor not found" });
       }
       const { status } = request.body as UpdateMonitorBody;
-      app.db
+      await app.db
         .prepare("UPDATE monitors SET status = ? WHERE id = ?")
         .run(status, id);
       return reply.code(200).send({ id, status });
@@ -121,13 +124,13 @@ export async function registerMonitorRoutes(app: FastifyInstance) {
   app.delete("/api/monitors/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
     const userId = request.user?.id ?? null;
-    const row = app.db
-      .prepare("SELECT id, user_id AS userId FROM monitors WHERE id = ?")
-      .get(id) as { id: string; userId: string | null } | undefined;
+    const row = await app.db
+      .prepare('SELECT id, user_id AS "userId" FROM monitors WHERE id = ?')
+      .get<{ id: string; userId: string | null }>(id);
     if (!row || row.userId !== userId) {
       return reply.code(404).send({ error: "monitor not found" });
     }
-    app.db.prepare("DELETE FROM monitors WHERE id = ?").run(id);
+    await app.db.prepare("DELETE FROM monitors WHERE id = ?").run(id);
     return reply.code(204).send();
   });
 }

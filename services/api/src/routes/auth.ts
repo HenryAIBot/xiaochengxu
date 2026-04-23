@@ -10,18 +10,18 @@ function newToken() {
   return randomBytes(24).toString("hex");
 }
 
-function upsertByOpenId(
+async function upsertByOpenId(
   app: FastifyInstance,
   openId: string,
   unionId: string | null,
-): { userId: string; token: string; isNew: boolean } {
+): Promise<{ userId: string; token: string; isNew: boolean }> {
   const now = new Date().toISOString();
-  const existing = app.db
+  const existing = await app.db
     .prepare("SELECT id, token FROM users WHERE wechat_openid = ?")
-    .get(openId) as { id: string; token: string } | undefined;
+    .get<{ id: string; token: string }>(openId);
 
   if (existing) {
-    app.db
+    await app.db
       .prepare("UPDATE users SET last_seen_at = ? WHERE id = ?")
       .run(now, existing.id);
     return { userId: existing.id, token: existing.token, isNew: false };
@@ -29,7 +29,7 @@ function upsertByOpenId(
 
   const id = randomUUID();
   const token = newToken();
-  app.db
+  await app.db
     .prepare(
       `INSERT INTO users (id, token, wechat_openid, wechat_union_id, created_at, last_seen_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -44,7 +44,7 @@ export function registerAuthRoutes(options: AuthRouteOptions = {}) {
       const now = new Date().toISOString();
       const id = randomUUID();
       const token = newToken();
-      app.db
+      await app.db
         .prepare(
           `INSERT INTO users (id, token, created_at, last_seen_at)
            VALUES (?, ?, ?, ?)`,
@@ -81,7 +81,11 @@ export function registerAuthRoutes(options: AuthRouteOptions = {}) {
             request.body.code,
             options.wechat,
           );
-          const { userId, token, isNew } = upsertByOpenId(app, openId, unionId);
+          const { userId, token, isNew } = await upsertByOpenId(
+            app,
+            openId,
+            unionId,
+          );
           return reply.code(isNew ? 201 : 200).send({ userId, token });
         } catch (error) {
           const message =

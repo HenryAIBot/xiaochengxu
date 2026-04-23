@@ -25,6 +25,8 @@ export function ReportUnlockScreen({
   onActionTap,
   onContactAdvisor,
   onStartMonitor,
+  defaultEmail,
+  defaultPhone,
 }: {
   onUnlock(input: {
     email?: string;
@@ -33,9 +35,12 @@ export function ReportUnlockScreen({
   onActionTap?: (action: string) => void;
   onContactAdvisor?: () => void;
   onStartMonitor?: () => void;
+  /** Prefilled from the logged-in user's previously-submitted consultation. */
+  defaultEmail?: string;
+  defaultPhone?: string;
 }) {
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState(defaultEmail ?? "");
+  const [phone, setPhone] = useState(defaultPhone ?? "");
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"ok" | "error">("ok");
   const [fullReport, setFullReport] = useState<FullReportViewModel | null>(

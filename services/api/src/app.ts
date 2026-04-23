@@ -1,8 +1,9 @@
 import rateLimit from "@fastify/rate-limit";
 import type { QueueClient, Redis } from "@xiaochengxu/queue";
 import Fastify from "fastify";
+import { type DatabaseAdapter, SqliteAdapter } from "./lib/db-adapter.js";
 import {
-  type QueryTaskDatabase,
+  createInMemoryAdapter,
   createInMemoryDb,
   createQueryTaskDatabase,
 } from "./lib/db.js";
@@ -25,7 +26,7 @@ import { registerStorefrontRoutes } from "./routes/storefronts.js";
 
 declare module "fastify" {
   interface FastifyInstance {
-    db: QueryTaskDatabase;
+    db: DatabaseAdapter;
     queue: QueueClient;
     internalToken: string | null;
   }
@@ -36,7 +37,7 @@ declare module "fastify" {
 }
 
 export interface BuildAppOptions {
-  db?: QueryTaskDatabase;
+  db?: DatabaseAdapter;
   queue?: QueueClient;
   internalToken?: string | null;
   /**
@@ -90,7 +91,10 @@ export function createNoopQueueClient(): QueueClient {
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
-  const db = options.db ?? createQueryTaskDatabase();
+  // Synchronous buildApp — Postgres is opt-in via explicitly passed
+  // `db: PostgresAdapter`. The default path stays on sqlite so tests
+  // and single-instance dev remain zero-config.
+  const db = options.db ?? new SqliteAdapter(createQueryTaskDatabase());
   const ownsDb = !options.db;
   const queue = options.queue ?? createNoopQueueClient();
   const internalToken =
@@ -141,7 +145,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   }
 
   app.addHook("preHandler", async (request) => {
-    request.user = resolveRequestUser(db, request);
+    request.user = await resolveRequestUser(db, request);
   });
 
   if (errorReporter) {
@@ -186,15 +190,23 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(registerConsultationRoutes);
   app.register(registerAdvisorRoutes);
 
-  seedDefaultAdvisors(db);
+  app.addHook("onReady", async () => {
+    await seedDefaultAdvisors(db);
+  });
 
   if (ownsDb) {
     app.addHook("onClose", async () => {
-      db.close();
+      await db.close();
     });
   }
 
   return app;
 }
 
-export { createInMemoryDb, createQueryTaskDatabase } from "./lib/db.js";
+export {
+  createDatabaseAdapter,
+  createInMemoryAdapter,
+  createInMemoryDb,
+  createQueryTaskDatabase,
+} from "./lib/db.js";
+export { PostgresAdapter, SqliteAdapter } from "./lib/db-adapter.js";

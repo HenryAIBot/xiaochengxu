@@ -319,3 +319,37 @@ xiaochengxu/
 - E.4：视觉设计二轮
 - #14：微信小程序真 appid + 体验版
 - #20：sean-server 上游 PR 合并
+
+### 22 轮（2026-04-24）：async DB 迁移 + 上线 runbook
+
+**结论**：
+- 测试：164 → **168**（+4；包括 4 个真 Postgres E2E 路由测试。sqlite 路径下 168 中 8 skipped，postgres 路径下 168 全跑）
+- `pnpm lint` / `pnpm test` / `pnpm build` 全绿
+- Postgres 从"基础设施就绪"升级为"路由实际跑通"
+
+**G. routes → async DB adapter（done，真实可切 Postgres）**
+- 新 `services/api/src/lib/db-adapter.ts`：`DatabaseAdapter` + `PreparedStatement` 接口，`SqliteAdapter`（wraps better-sqlite3 用 Promise.resolve）+ `PostgresAdapter`（pg Pool）
+- `preparePg()` 处理两种写法：`?` 正序重写 → `$N`，`@name` 扫描建 order 映射 → `$N`；`extractParams()` 从对象/数组/varargs 任一形态取出传给 pg
+- `services/api/src/lib/db.ts` 新增 `createDatabaseAdapter({ databaseUrl })` + `createInMemoryAdapter()`；根据 `DATABASE_URL` 路由到 sqlite 或 pg
+- `services/api/src/app.ts`：`app.db` 类型从 `Database.Database` 改成 `DatabaseAdapter`；`preHandler` 里 `await resolveRequestUser`；seed advisors 改到 `onReady` 异步
+- 所有 9 个路由文件 + `QueryTaskRepository` + `user-identity.ts` 全量 `await` 化
+- `reports.unlocked` / `advisors.active` 两列在 pg 是 BOOLEAN、在 sqlite 是 INTEGER —— 用 `db.dialect` 按需 true/1 喂参
+- JSONB 列（`evidence_json` / `recommended_actions_json` / `extra_json` / `normalized_input`）：pg 返回已解析对象，sqlite 返回字符串；`parseJsonArray` / `parseJsonValue` / `parseJsonField` 都做了 polyglot 适配
+- `listActiveAdvisors` 的 ORDER BY 从 `COALESCE(last_assigned_at, '')` 改成 `last_assigned_at ASC NULLS FIRST, created_at ASC`（pg 的 TIMESTAMPTZ 接空字符串会报 22007）
+- 新增 `tests/api/postgres-routes-e2e.test.ts`：对真 Postgres 跑 anonymous auth → query-tasks → internal writeback → report unlock → monitor 隔离，4 case 全过；`DATABASE_URL_TEST` 没设时 describe.skipIf 跳过
+
+**H. USPTO 真实 endpoint 条件测试（done）**
+- `tests/tools/uspto-live-smoke.test.ts`：当 `USPTO_LIVE_TEST_URL_TEMPLATE` 设置时才跑，对真 endpoint 发 `searchMarks()` 并断言返回 marks 数组，每个 mark 至少有 owner 或 mark 字段
+- 不设时 `describe.skipIf` 跳过；不破坏 CI
+
+**I. UI 打磨（done）**
+- `ReportUnlockScreen` 新增 `defaultEmail` / `defaultPhone` props
+- `ReportPage` 从 `Taro.getStorageSync("lastUnlockContact")` 读出上次填的邮箱/手机号做默认值；成功解锁时 `rememberContact(payload)` 回写
+- 视觉 token 已足够细，无需二轮
+
+**J. 微信小程序上线 runbook（done）**
+- `docs/wechat-release-runbook.md`：9 节从申请 AppID 到发布 / 回滚全链路，⚠️ 人工动作单独标注，env 变量 + pnpm 命令直接可复用
+
+**K. 上游 PR（本轮提）**
+
+本轮测试增长：164 → 168（+4 Postgres E2E）。代码变更：21 个文件改动、3 个新文件。文件累计：155+。

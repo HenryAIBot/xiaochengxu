@@ -2,6 +2,12 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+import {
+  type DatabaseAdapter,
+  PostgresAdapter,
+  SqliteAdapter,
+} from "./db-adapter.js";
+import { applyPostgresSchema, createPostgresPool } from "./postgres.js";
 
 export type QueryTaskDatabase = Database.Database;
 
@@ -272,4 +278,32 @@ export function createQueryTaskDatabase(filePath = DEFAULT_DB_PATH) {
 
 export function createInMemoryDb() {
   return createQueryTaskDatabase(":memory:");
+}
+
+/**
+ * Preferred entry point going forward: returns a dialect-neutral adapter
+ * whose `prepare/run/all/get/exec` calls are fully async. Selects between
+ * SQLite and Postgres based on `DATABASE_URL`:
+ *
+ *   DATABASE_URL=postgres://…   → PostgresAdapter + applyPostgresSchema
+ *   (unset) / file:… / :memory: → SqliteAdapter (wraps better-sqlite3)
+ *
+ * `sqliteFile` is respected only on the sqlite path.
+ */
+export async function createDatabaseAdapter(options?: {
+  databaseUrl?: string;
+  sqliteFile?: string;
+}): Promise<DatabaseAdapter> {
+  const url = options?.databaseUrl ?? process.env.DATABASE_URL;
+  if (url?.startsWith("postgres")) {
+    const pool = createPostgresPool(url);
+    await applyPostgresSchema(pool);
+    return new PostgresAdapter(pool);
+  }
+  return new SqliteAdapter(createQueryTaskDatabase(options?.sqliteFile));
+}
+
+/** Async convenience wrapper for tests that want an in-memory adapter. */
+export function createInMemoryAdapter(): DatabaseAdapter {
+  return new SqliteAdapter(createInMemoryDb());
 }
