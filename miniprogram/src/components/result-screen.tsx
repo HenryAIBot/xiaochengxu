@@ -28,6 +28,7 @@ function levelToClass(level: string): string {
 }
 
 function dataSourceBadge(dataSource?: string): string | null {
+  if (dataSource === "live") return "真实数据（外部 API）";
   if (dataSource === "fixture") return "演示数据（非真实 API）";
   if (dataSource === "mixed") return "部分来源为演示数据";
   return null;
@@ -56,6 +57,7 @@ export function ResultScreen({
     source: string;
     matchedField: string;
     description: string;
+    originalUrl?: string;
   }>;
   actions: string[];
   dataSource?: string;

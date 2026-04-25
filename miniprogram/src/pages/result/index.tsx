@@ -128,6 +128,19 @@ export default function ResultPage() {
   }
 
   const viewModel = toResultViewModel(pageStatus.result);
+  const contactAdvisor = () => {
+    setConsultationContext({
+      targetRef: {
+        kind: viewModel.monitorTarget
+          .targetKind as ConsultationTargetRef["kind"],
+        value: viewModel.monitorTarget.targetValue,
+      },
+      sourceReportId: viewModel.reportId,
+      sourceQueryTaskId: viewModel.taskId,
+      label: `${viewModel.toolName} · ${viewModel.monitorTarget.targetValue}`,
+    });
+    Taro.switchTab({ url: "/pages/profile/index" });
+  };
 
   return (
     <View>
@@ -171,22 +184,10 @@ export default function ResultPage() {
             Taro.showToast({ title: reason, icon: "none", duration: 3000 });
           }
         }}
-        onContactAdvisor={() => {
-          setConsultationContext({
-            targetRef: {
-              kind: viewModel.monitorTarget
-                .targetKind as ConsultationTargetRef["kind"],
-              value: viewModel.monitorTarget.targetValue,
-            },
-            sourceReportId: viewModel.reportId,
-            sourceQueryTaskId: viewModel.taskId,
-            label: `${viewModel.toolName} · ${viewModel.monitorTarget.targetValue}`,
-          });
-          Taro.switchTab({ url: "/pages/profile/index" });
-        }}
+        onContactAdvisor={contactAdvisor}
         onActionTap={(action) => {
           if (/顾问|联系|咨询|申诉|和解/.test(action)) {
-            Taro.switchTab({ url: "/pages/profile/index" });
+            contactAdvisor();
             return;
           }
           if (/监控|持续观察|继续观察|关注/.test(action)) {

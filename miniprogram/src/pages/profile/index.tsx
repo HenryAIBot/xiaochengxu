@@ -1,4 +1,5 @@
 import { Button, Input, Text, View } from "@tarojs/components";
+import { useDidShow } from "@tarojs/taro";
 import { useCallback, useEffect, useState } from "react";
 import {
   type ConsultationItem,
@@ -62,6 +63,13 @@ export default function ProfilePage() {
     }
   }, []);
 
+  const refreshContext = useCallback(() => {
+    const next = consumeConsultationContext();
+    if (next) {
+      setContext(next);
+    }
+  }, []);
+
   const nextStatus: Record<
     string,
     { status: ConsultationItem["status"]; label: string } | null
@@ -85,10 +93,14 @@ export default function ProfilePage() {
     }
   }
 
+  useDidShow(() => {
+    refreshContext();
+  });
+
   useEffect(() => {
-    setContext(consumeConsultationContext());
+    refreshContext();
     void load();
-  }, [load]);
+  }, [load, refreshContext]);
 
   async function submit() {
     const trimmedName = name.trim();

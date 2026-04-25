@@ -66,7 +66,15 @@ pnpm --filter @xiaochengxu/miniprogram dev # 终端 C
 | `MONITOR_TICK_INTERVAL_MS` | `300000` | jobs worker 触发 monitor 检查的间隔（毫秒） |
 | `COURTLISTENER_API_TOKEN` | *(空)* | 设置后 `tro_alert` 与 `case_progress` 切到真实 CourtListener v4 API；空则继续用 fixture。免费申请：https://www.courtlistener.com/help/api/rest/ |
 | `COURTLISTENER_BASE_URL` | `https://www.courtlistener.com` | 重定向到自托管或测试环境时覆盖 |
+| `USPTO_SEARCH_PROVIDER` | *(空)* | 设为 `markbase` 后，商标检索走 Markbase 的真实 USPTO 商标索引；设置 `USPTO_SEARCH_URL_TEMPLATE` 时优先走自建 USPTO proxy |
+| `MARKBASE_API_BASE_URL` | `https://api.markbase.co` | Markbase API endpoint |
+| `MARKBASE_STATUS_CODES` | `700,800` | Markbase 查询的 USPTO 状态码；默认只取 live registered / renewed registrations |
+| `RAINFOREST_API_KEY` | *(空)* | 设置后 Amazon ASIN / 店铺候选走 Rainforest live 数据；空则继续用 fixture |
+| `RAINFOREST_API_BASE_URL` | `https://api.rainforestapi.com/request` | Rainforest API endpoint |
+| `RAINFOREST_AMAZON_DOMAIN` | `amazon.com` | Rainforest 查询的 Amazon marketplace |
 | `TARO_APP_API_BASE` | `http://127.0.0.1:3000` | 小程序构建时注入的 API 地址 |
+
+API / jobs 启动时会自动向上查找并加载项目根目录 `.env`；`.env` 已被 git 忽略。`.env.example` 只保留字段清单和非敏感默认值。
 
 ## 端到端手动验证
 

@@ -3,10 +3,12 @@ import { Button, Text, View } from "@tarojs/components";
 export function StoreCandidateScreen({
   items,
   busyAsin,
+  dataSource,
   onSelect,
 }: {
   items: Array<{ asin: string; title: string }>;
   busyAsin?: string | null;
+  dataSource?: string | null;
   onSelect(asin: string): void;
 }) {
   if (items.length === 0) {
@@ -27,6 +29,12 @@ export function StoreCandidateScreen({
         <Text className="card__text">
           命中该店铺的商品，选一个进入 ASIN 级检测
         </Text>
+        {dataSource === "live" ? (
+          <Text className="badge">真实商品数据（Rainforest API）</Text>
+        ) : null}
+        {dataSource === "fixture" ? (
+          <Text className="badge">演示数据（非真实 API）</Text>
+        ) : null}
       </View>
       <View>
         {items.map((item) => {

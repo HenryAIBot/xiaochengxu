@@ -80,6 +80,7 @@ export function HomeScreen({
                 <Button
                   key={option.key}
                   className={className}
+                  disabled={submitting}
                   onClick={() => setTool(option.key)}
                 >
                   {option.label}
@@ -93,6 +94,7 @@ export function HomeScreen({
                 ? "btn btn--primary btn--block btn--disabled"
                 : "btn btn--primary btn--block"
             }
+            disabled={disabled}
             onClick={() => void handleSubmit()}
           >
             {submitting ? "检测中…" : "立即检测"}

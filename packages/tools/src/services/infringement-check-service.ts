@@ -14,12 +14,14 @@ function extractListingBrand(html: string) {
   // 优先从 Brand: xxx 格式提取
   const bylineMatch = html.match(/Brand:\s*([^<\n]+)/i);
   if (bylineMatch?.[1]) {
-    return bylineMatch[1].trim().toLowerCase();
+    const brand = bylineMatch[1].trim().toLowerCase();
+    if (brand) return brand;
   }
 
   const brandMatch = html.match(/data-brand="([^"]+)"/i);
   if (brandMatch?.[1]) {
-    return brandMatch[1].trim().toLowerCase();
+    const brand = brandMatch[1].trim().toLowerCase();
+    if (brand) return brand;
   }
 
   const titleMatch =

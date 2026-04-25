@@ -33,6 +33,10 @@ export default function HomePage() {
             ) {
               const candidates = await listStoreProducts(payload.input);
               Taro.setStorageSync("storeCandidates", candidates.items);
+              Taro.setStorageSync(
+                "storeCandidatesDataSource",
+                candidates.dataSource,
+              );
               Taro.navigateTo({ url: "/pages/select-product/index" });
               return;
             }

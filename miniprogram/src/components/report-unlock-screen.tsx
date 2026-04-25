@@ -156,6 +156,9 @@ function FullReportContent({
   const levelClass = LEVEL_BADGE[report.level] ?? "badge";
   return (
     <View className="card">
+      {report.dataSource === "live" ? (
+        <Text className="badge">真实数据（外部 API）</Text>
+      ) : null}
       {report.dataSource === "fixture" ? (
         <Text className="badge badge--fixture">演示数据（非真实 API）</Text>
       ) : null}

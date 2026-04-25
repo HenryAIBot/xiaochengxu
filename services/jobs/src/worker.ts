@@ -3,7 +3,7 @@ import {
   QUEUE_NAMES,
   createRedisConnection,
 } from "@xiaochengxu/queue";
-import { createDefaultToolExecutor } from "@xiaochengxu/tools";
+import { createDefaultToolExecutor, loadRootEnv } from "@xiaochengxu/tools";
 import { Queue, Worker } from "bullmq";
 import {
   type AdvisorNotificationJob,
@@ -20,6 +20,8 @@ import {
 } from "./processors/query-task-processor.js";
 import { sendEmail } from "./providers/email-provider.js";
 import { sendSms } from "./providers/sms-provider.js";
+
+loadRootEnv();
 
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:3000";
 const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN ?? "";

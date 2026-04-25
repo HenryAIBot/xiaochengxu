@@ -77,6 +77,7 @@ describe("ReportUnlockScreen", () => {
         ],
         recommendedActions: ["立即复核 Listing 品牌词"],
         extra: null,
+        dataSource: "live",
       },
     });
 
@@ -92,6 +93,7 @@ describe("ReportUnlockScreen", () => {
     });
 
     expect(screen.getByText("查询对象：nike")).toBeTruthy();
+    expect(screen.getByText("真实数据（外部 API）")).toBeTruthy();
     expect(screen.getByText("检测到近期 TRO 案件信号。")).toBeTruthy();
     expect(screen.getByText("相关品牌近期出现联邦法院案件。")).toBeTruthy();
     expect(screen.getByText("立即复核 Listing 品牌词")).toBeTruthy();

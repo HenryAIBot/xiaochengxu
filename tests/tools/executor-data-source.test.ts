@@ -1,7 +1,9 @@
 import {
   createDefaultToolExecutor,
   mergeDataSources,
+  resolveAmazonConnector,
   resolveCourtListenerConnector,
+  resolveUsptoConnector,
 } from "@xiaochengxu/tools";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -51,6 +53,50 @@ describe("resolveCourtListenerConnector", () => {
     });
     expect(resolved.source).toBe("fixture");
     expect(resolved.connector).toBe(stub);
+  });
+});
+
+describe("resolveAmazonConnector", () => {
+  const originalRainforestKey = process.env.RAINFOREST_API_KEY;
+  const originalListingTemplate = process.env.AMAZON_LISTING_URL_TEMPLATE;
+  const originalStoreTemplate = process.env.AMAZON_STORE_URL_TEMPLATE;
+
+  afterEach(() => {
+    process.env.RAINFOREST_API_KEY = originalRainforestKey ?? "";
+    process.env.AMAZON_LISTING_URL_TEMPLATE = originalListingTemplate ?? "";
+    process.env.AMAZON_STORE_URL_TEMPLATE = originalStoreTemplate ?? "";
+  });
+
+  it("uses Rainforest as a live Amazon source when configured", () => {
+    process.env.RAINFOREST_API_KEY = "rainforest-key";
+    process.env.AMAZON_LISTING_URL_TEMPLATE = "";
+    process.env.AMAZON_STORE_URL_TEMPLATE = "";
+
+    const resolved = resolveAmazonConnector();
+
+    expect(resolved.source).toBe("live");
+    expect(resolved.connector.getListingHtml).toEqual(expect.any(Function));
+    expect(resolved.connector.listStoreProducts).toEqual(expect.any(Function));
+  });
+});
+
+describe("resolveUsptoConnector", () => {
+  const originalProvider = process.env.USPTO_SEARCH_PROVIDER;
+  const originalTemplate = process.env.USPTO_SEARCH_URL_TEMPLATE;
+
+  afterEach(() => {
+    process.env.USPTO_SEARCH_PROVIDER = originalProvider ?? "";
+    process.env.USPTO_SEARCH_URL_TEMPLATE = originalTemplate ?? "";
+  });
+
+  it("uses Markbase as a live trademark source when selected", () => {
+    process.env.USPTO_SEARCH_PROVIDER = "markbase";
+    process.env.USPTO_SEARCH_URL_TEMPLATE = "";
+
+    const resolved = resolveUsptoConnector();
+
+    expect(resolved.source).toBe("live");
+    expect(resolved.connector.searchMarks).toEqual(expect.any(Function));
   });
 });
 

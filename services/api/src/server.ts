@@ -1,6 +1,9 @@
 import { createQueueClient, createRedisConnection } from "@xiaochengxu/queue";
+import { loadRootEnv } from "@xiaochengxu/tools";
 import { buildApp } from "./app.js";
 import { type ErrorReporter, stderrReporter } from "./lib/error-reporter.js";
+
+loadRootEnv();
 
 /**
  * Build a Sentry reporter if `@sentry/node` is installed *and* SENTRY_DSN

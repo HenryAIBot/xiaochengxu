@@ -133,6 +133,38 @@ describe("ResultPage", () => {
     );
   });
 
+  it("keeps report context when advisor-like recommended actions are tapped", async () => {
+    taro.getStorageSync.mockImplementation((key: string) =>
+      key === "queryResult:task-1"
+        ? {
+            ...cachedCompletedResult,
+            recommendedActions: ["联系顾问复核"],
+          }
+        : undefined,
+    );
+
+    render(<ResultPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("联系顾问复核")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText("联系顾问复核"));
+
+    expect(taro.setStorageSync).toHaveBeenCalledWith(
+      "consultationContext",
+      expect.objectContaining({
+        targetRef: { kind: "brand", value: "nike" },
+        sourceReportId: "report-1",
+        sourceQueryTaskId: "task-1",
+        label: "TRO 预警 · nike",
+      }),
+    );
+    expect(taro.switchTab).toHaveBeenCalledWith({
+      url: "/pages/profile/index",
+    });
+  });
+
   it("shows a failed state when the polled task failed and allows retry", async () => {
     taro.getStorageSync.mockImplementation((key: string) =>
       key === "userToken" ? "test-token" : undefined,

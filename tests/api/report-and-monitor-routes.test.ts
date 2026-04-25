@@ -145,9 +145,11 @@ describe("report unlock and monitor routes", () => {
     });
 
     expect(storefront.statusCode).toBe(200);
-    expect(storefront.json()).toMatchObject({
-      items: [{ asin: "B0C1234567" }, { asin: "B0C7654321" }],
-    });
+    expect(storefront.json().dataSource).toBe("fixture");
+    expect(storefront.json().items.slice(0, 2)).toMatchObject([
+      { asin: "B0C1234567" },
+      { asin: "B0C1234568" },
+    ]);
   });
 
   it("rejects report unlock without contact information", async () => {

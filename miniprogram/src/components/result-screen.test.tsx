@@ -102,4 +102,23 @@ describe("ResultScreen", () => {
 
     expect(screen.getByText("暂未发现可展示的关键证据")).toBeTruthy();
   });
+
+  it("shows a live data badge when all evidence comes from external APIs", () => {
+    render(
+      <ResultScreen
+        toolName="侵权体检"
+        level="suspected_high"
+        summary="命中真实商标风险。"
+        updatedAt="2026-04-25 17:20"
+        evidence={evidence}
+        actions={["继续复核"]}
+        dataSource="live"
+        onUnlockReport={vi.fn()}
+        onStartMonitor={vi.fn()}
+        onContactAdvisor={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("真实数据（外部 API）")).toBeTruthy();
+  });
 });

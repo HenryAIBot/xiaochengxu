@@ -1,7 +1,7 @@
 # 项目现状盘点
 
 > 原始盘点日期：2026-04-21
-> 最近更新：2026-04-21（经过 7 轮迭代，详见文末 `最近变更日志`）
+> 最近更新：2026-04-25（经过 31 轮迭代，详见文末 `最近变更日志`）
 
 ## 一句话结论
 
@@ -104,11 +104,12 @@ xiaochengxu/
 ### 真实数据源
 
 - CourtListener v4 已可 live（env `COURTLISTENER_API_TOKEN`）
-- USPTO 已有**可插拔**live connector（env `USPTO_SEARCH_URL_TEMPLATE` + 可选 auth header）；需要自备代理服务
-- Amazon listing 仍是 fixture —— 没有公开免费 API，生产需接 Keepa / Rainforest 等付费 API
-- 已做：响应 TTL 缓存（5 min，env `TOOL_CACHE_TTL_MS`）、`sourceFetchedAt` 字段
-- 未做：外部 API 限流（per-provider）、"可复核原始链接"字段
-- 未做：USPTO live connector 的真实 endpoint 验证（只通过 mock fetch 测试）
+- USPTO/商标检索已有两条 live 路径：开发环境可用 `USPTO_SEARCH_PROVIDER=markbase` 直连 Markbase 真实 USPTO 商标索引；生产也可继续用 `USPTO_SEARCH_URL_TEMPLATE` 自建代理
+- Amazon listing/storefront 已有**可插拔**live connector（env `RAINFOREST_API_KEY` 直连 Rainforest，或 `AMAZON_LISTING_URL_TEMPLATE` / `AMAZON_STORE_URL_TEMPLATE` 自备代理）
+- 已做：响应 TTL 缓存（5 min，env `TOOL_CACHE_TTL_MS`）、`sourceFetchedAt` 字段、per-provider 外部 API 限流、可复核 `originalUrl` 字段
+- 已做：真实数据源接入文档 `docs/superpowers/specs/2026-04-25-live-data-source-integration-design.md`
+- 已做：内部数据源状态接口 `GET /api/internal/data-sources/status`，用于上线前确认各能力是 `live` 还是 `fixture`
+- 未做：生产级自建 USPTO proxy（当前开发环境先用 Markbase live 数据跑通）
 
 ### 鉴权与访问控制
 
@@ -165,8 +166,11 @@ xiaochengxu/
 | 小程序环境切换 | done | `TARO_APP_API_BASE` env 注入 |
 | 报告详情页 | done | 含 dataSource 徽章 + sourceFetchedAt |
 | 真实数据源 - CourtListener | done | env token 启用；mock-fetch 测试 |
-| 真实数据源 - USPTO | partial | 可插拔 URL 模板已就绪；未对真实服务实测 |
-| 真实数据源 - Amazon | todo | 仍为 fixture（需付费 API） |
+| 真实数据源 - USPTO | partial | Markbase live connector 已接并配置到本地开发；自建 USPTO proxy 仍待生产化 |
+| 真实数据源 - Amazon | partial | Rainforest 直连 connector 已接；listing/storefront URL 模板也保留；本地页面已可显示 live 商品候选；仍需在部署环境配置真实 key |
+| 真实数据源接入文档 | done | 已梳理 P0/P1/P2 数据源、推荐接入方式、proxy 契约、操作步骤和验收标准 |
+| 数据源状态接口 | done | `GET /api/internal/data-sources/status` 返回 provider/capability/dataSource/missingEnv，不暴露 secret |
+| 小程序 Rainforest 可见性 | done | 店铺候选页显示“真实商品数据（Rainforest API）”徽章，fixture 时显示演示数据徽章 |
 | TTL 缓存 | done | `TtlCache` + `sourceFetchedAt` 落库 |
 | 内部端点鉴权 | done | 共享密钥；所有 `/api/internal/*`（含 raw）均受保护 |
 | 外部身份识别 | done | 匿名 token + request.user + user_id 写入 |
@@ -425,3 +429,142 @@ xiaochengxu/
 - GHCR 推送（CI 已就绪，等 repo Settings → Actions 给 Workflow Permissions = Read and write）
 - 部署目标（云厂商/k8s/VPS 选型）
 - 商业化定价 / 顾问 SLA / 监控滥用上限 / 文案合规审阅
+
+### 25 轮（2026-04-25）：主路径 UX 小收口 + 浏览器自测
+
+**结论**：
+- 测试：190 → **193**（+3；Postgres / USPTO live 条件测试仍按 env 跳过）
+- `pnpm lint` / `pnpm test` / `pnpm build` 全绿
+- 本轮不引入新后端能力，专注减少主流程里的断点和误触
+
+**A. 首页提交可操作性（done）**
+- `HomeScreen` 的提交按钮和工具切换按钮在提交中写入真实 `disabled` 属性，不再只依赖 class 和 handler guard。
+- 新增测试覆盖提交 pending 期间按钮文案、禁用态、完成后恢复，避免重复创建查询任务。
+
+**B. 结果页顾问承接上下文一致性（done）**
+- 抽出 `contactAdvisor()`，让底部"联系顾问"和建议动作中的"顾问 / 联系 / 咨询 / 申诉 / 和解"类入口都写入同一份 `consultationContext`。
+- 用户从建议动作跳到"我的"页时，会带上检测对象、报告 ID、任务 ID 和中文 label；顾问表单能继续展示"本次咨询对象"。
+- 补齐 `ResultScreen` evidence 类型里的 `originalUrl`，与 view-model / 真实渲染字段保持一致。
+- Computer Use 真实点击发现：Profile tab 如果之前已打开，`switchTab` 不会重新 mount，导致 `useEffect` 不会再次消费上下文。已补 `useDidShow()` 刷新，并新增回归测试。
+
+**C. 测试卫生（done）**
+- `HomeScreen` 测试补 `cleanup()`，避免多个 render 残留 DOM 影响后续断言。
+
+**D. 本地验证注意事项**
+- 默认 shell 当前指向 Node 23，会导致 `better-sqlite3` ABI 与 Node 22 构建产物不匹配；本轮正式验证均显式 `nvm use` 到 `.nvmrc` 的 Node 22.22.1。
+
+### 26 轮（2026-04-25）：真实数据源接入文档
+
+**结论**：
+- 新增 `docs/superpowers/specs/2026-04-25-live-data-source-integration-design.md`
+- 明确真实数据源分级：P0 CourtListener / USPTO / Amazon，P1 PACER/RECAP、用户授权数据、顾问复核，P2 图片/logo 与站外噪声源暂缓
+- 给出当前 connector/env 的接入路径、供应商 proxy 契约、操作步骤、验收标准和风险处理
+
+**本轮性质**：
+- 文档任务，无运行时代码变更
+- 同步修正本状态文档里关于 per-provider 限流和 `originalUrl` 的过期描述
+
+### 27 轮（2026-04-25）：真实数据源接入起步
+
+**结论**：
+- 测试：**190 passed / 9 skipped / total 199**
+- `pnpm lint` / `pnpm test` / `pnpm build` 全绿
+- 本轮把“数据源接入方案”落到第一批代码：Amazon 店铺候选从硬编码路由切到 connector；新增内部数据源状态接口
+
+**A. Amazon 店铺候选接入 connector（partial）**
+- `GET /api/storefronts/:storeName/products` 不再在 API 层硬编码两条商品，而是通过 `StorefrontCandidateService + resolveAmazonConnector()`。
+- 配置 `AMAZON_LISTING_URL_TEMPLATE + AMAZON_STORE_URL_TEMPLATE` 后会调用 live store proxy，并返回 `dataSource: "live"`。
+- 只配置 listing、未配置 store proxy 时，接口返回 503 + `AMAZON_STOREFRONT_SOURCE_UNAVAILABLE`，不再用假数据掩盖缺配置。
+- fixture connector 补 `listStoreProducts()`，未接真实代理时仍能给演示候选。
+
+**B. 数据源状态接口（done）**
+- 新增 `describeDefaultDataSources()`：按 capability 输出 `court_search` / `docket_entries` / `trademark_search` / `listing_lookup` / `storefront_lookup` 的 `dataSource`、`requiredEnv`、`missingEnv`。
+- 新增 `GET /api/internal/data-sources/status`，沿用内部 token 保护，不返回任何 secret 值。
+
+**C. 测试覆盖（done）**
+- 新增 `tests/tools/data-source-status.test.ts`
+- 新增 `tests/api/storefront-live-route.test.ts`
+- 新增 `tests/api/data-sources-status-route.test.ts`
+- 更新 `tests/api/report-and-monitor-routes.test.ts` 适配 connector 驱动的店铺候选返回
+
+### 28 轮（2026-04-25）：Rainforest Amazon 直连接入
+
+**结论**：
+- 测试：**196 passed / 9 skipped / total 205**
+- `pnpm lint` / `pnpm test` / `pnpm build` 全绿
+- 本轮不把用户提供的 Rainforest key 写入仓库，只新增 `RAINFOREST_API_KEY` env 接入能力
+
+**A. Rainforest connector（done）**
+- 新增 `LiveRainforestAmazonConnector`：调用 `https://api.rainforestapi.com/request`。
+- ASIN 查询：`type=product&asin=...`，把 Rainforest product JSON 转成现有侵权体检能解析的 listing HTML。
+- 店铺候选：输入像 seller id 时走 `type=seller_products&seller_id=...`；普通店铺名走 `type=search&search_term=...`，再归一成 `{ asin, title }`。
+- `resolveAmazonConnector()` 支持 `RAINFOREST_API_KEY`：未配置自建 `AMAZON_*_URL_TEMPLATE` 时自动走 Rainforest live。
+
+**B. 安全与配置（done）**
+- `.gitignore` 增加 `.env` / `.env.*`，避免 API key 误提交；保留 `.env.example`。
+- `.env.example` 增加 `RAINFOREST_API_KEY` / `RAINFOREST_API_BASE_URL` / `RAINFOREST_AMAZON_DOMAIN` 占位。
+- 数据源状态接口已识别 Rainforest：设置 `RAINFOREST_API_KEY` 后 Amazon `listing_lookup` / `storefront_lookup` 会显示 `live`。
+
+**C. 测试覆盖（done）**
+- 新增 `tests/tools/live-rainforest-amazon-connector.test.ts`
+- 更新 `tests/tools/data-source-status.test.ts`
+- 更新 `tests/tools/executor-data-source.test.ts`
+
+### 29 轮（2026-04-25）：本地 `.env` 自动加载
+
+**结论**：
+- 测试：**198 passed / 9 skipped / total 207**
+- `pnpm lint` / `pnpm test` / `pnpm build` 全绿
+- 本轮保留 `.env.example` 为字段清单，同时新增本地 `.env` 自动读取能力；真实 key 放本地 `.env`，不进 git
+
+**A. 根目录 `.env` 自动加载（done）**
+- 新增 `loadRootEnv()`，API / jobs 启动时会从当前目录向上查找项目根目录 `.env` 并加载。
+- `.env` 不覆盖命令行显式传入的 env，避免 CI/生产环境被本地文件反向污染。
+- `services/api/src/server.ts` 和 `services/jobs/src/worker.ts` 已接入自动加载。
+
+**B. 开发配置落地（done）**
+- 根目录 `.env` 已写入 Rainforest 本地开发配置。
+- `.env.example` 只保留 `RAINFOREST_API_KEY=` 空字段和非敏感默认值，方便查看字段，不保存真实 key。
+- README 补充 `.env` 自动加载和 Rainforest 变量说明。
+
+**C. 测试覆盖（done）**
+- 新增 `tests/tools/env-loader.test.ts` 覆盖向上查找 `.env`、引号解析和不覆盖已有 env 的行为。
+
+### 30 轮（2026-04-25）：Rainforest 页面可见性验证
+
+**结论**：
+- 测试：新增 `StoreCandidateScreen` 2 个组件用例；`pnpm vitest run miniprogram/src/components/store-candidate-screen.test.tsx` / `pnpm lint` / `pnpm --filter @xiaochengxu/miniprogram build` 全绿
+- 页面现在能直接看出商品候选来自 Rainforest，而不是只在接口返回里藏着 `dataSource: "live"`
+- 本地 API 已通过 `GET /api/internal/data-sources/status` 确认 Amazon `listing_lookup` / `storefront_lookup` 为 `live`
+
+**A. 店铺候选页数据源徽章（done）**
+- `GET /api/storefronts/:storeName/products` 返回的 `dataSource` 会从首页写入 storage，并传给 `/pages/select-product/index`。
+- 候选商品页在 `dataSource === "live"` 时显示“真实商品数据（Rainforest API）”；在 `fixture` 时显示“演示数据（非真实 API）”。
+- 用户影响：开发阶段测试时，不需要打开 DevTools 或看接口响应；页面上就能确认当前列表是否使用真实商品数据。
+
+**B. 本地真实链路验证（done）**
+- 使用 `nike shoes store` 走首页提交 → 候选商品页，接口返回 `dataSource: "live"`，候选商品标题来自 Rainforest 搜索结果。
+- 已在浏览器中看到真实商品候选，例如 `Nike Men's Revolution 8 Road Running Shoes`、`Nike Men's Air Monarch IV Training/Workout Shoes` 等。
+
+### 31 轮（2026-04-25）：侵权体检商标源切 live
+
+**结论**：
+- 测试：新增 `LiveMarkbaseTrademarkConnector` 3 个单元用例；`tests/tools/data-source-status.test.ts` / `tests/tools/executor-data-source.test.ts` 同步覆盖 Markbase live 配置
+- 本地 `.env` 已配置 `USPTO_SEARCH_PROVIDER=markbase`，API 重启后 `infringement_check` 的商标检索不再走 fixture
+- 当前侵权体检真实链路：Amazon 商品/店铺候选走 Rainforest；USPTO 商标检索走 Markbase 的真实 USPTO 商标索引；结果页应显示 `dataSource: "live"`（或所有证据源 live 时不显示 fixture 警告）
+
+**A. Markbase 商标 connector（done）**
+- 新增 `LiveMarkbaseTrademarkConnector`，调用 `https://api.markbase.co/search`。
+- 默认检索 USPTO 状态码 `700,800`，优先取 live registered / renewed trademarks，避免 dead/abandoned 记录把风险结果噪声拉高。
+- 结果归一为现有 `{ owner, mark, status, url }` 契约，并从 serial number 合成 TSDR 可复核链接。
+
+**B. 配置与状态接口（done）**
+- `resolveUsptoConnector()` 支持 `USPTO_SEARCH_PROVIDER=markbase`；若配置了 `USPTO_SEARCH_URL_TEMPLATE`，仍优先走自建 USPTO proxy。
+- `GET /api/internal/data-sources/status` 会在 Markbase 选中时把 `uspto/trademark_search` 标记为 `live`。
+- `.env.example` / README 已补 Markbase 配置说明；真实密钥仍只放本地 `.env`。
+- 结果页 / 报告页现在在 `dataSource: "live"` 时显示“真实数据（外部 API）”，不再只在 fixture 时提示。
+
+**C. ASIN 品牌解析修复（done）**
+- Rainforest 商品详情偶发 `brand` 为空时，旧逻辑会把空字符串传给商标检索，可能命中无关商标。
+- 已改为跳过空 `Brand:`，回退到 product title 第一词；`B0DPHRHRDL` 现在解析为 `nike`，命中 `NIKE / Nike, Inc.`。
+- 新增回归测试覆盖“Brand 字段为空但标题含品牌”的 ASIN 检测路径。

@@ -519,4 +519,28 @@ export class FixtureAmazonListingConnector {
       <div id="sellerProfile" data-seller-id="${listing.sellerId}">${listing.sellerName}</div>
     </body></html>`;
   }
+
+  async listStoreProducts(storeName: string) {
+    const needle = storeName.trim().toLowerCase();
+    const matches = Object.values(REAL_LISTINGS).filter((listing) => {
+      const haystack = `${listing.brand} ${listing.sellerName} ${listing.title}`;
+      return haystack.toLowerCase().includes(needle.replace(/\s+store$/, ""));
+    });
+
+    const selected =
+      matches.length > 0
+        ? matches
+        : [
+            REAL_LISTINGS.B0C1234567,
+            REAL_LISTINGS.B0C7654321,
+            REAL_LISTINGS.B0D1111111,
+          ];
+
+    return {
+      items: selected.slice(0, 5).map((listing) => ({
+        asin: listing.asin,
+        title: listing.title,
+      })),
+    };
+  }
 }

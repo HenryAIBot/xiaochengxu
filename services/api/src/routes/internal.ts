@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   type MonitorTargetKind,
   createDefaultMonitorChecker,
+  describeDefaultDataSources,
 } from "@xiaochengxu/tools";
 import type { FastifyInstance } from "fastify";
 
@@ -146,6 +147,10 @@ export async function registerInternalRoutes(app: FastifyInstance) {
     const items = await app.queue.listFailedNotifications(limit);
     return { items };
   });
+
+  app.get("/api/internal/data-sources/status", async () =>
+    describeDefaultDataSources(),
+  );
 
   app.post(
     "/api/internal/notifications/failed/:jobId/retry",

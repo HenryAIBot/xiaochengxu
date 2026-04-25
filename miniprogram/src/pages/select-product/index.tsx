@@ -6,6 +6,7 @@ import { createQueryTask } from "../../lib/api";
 
 export default function SelectProductPage() {
   const items = Taro.getStorageSync("storeCandidates") ?? [];
+  const dataSource = Taro.getStorageSync("storeCandidatesDataSource") ?? null;
   const [busyAsin, setBusyAsin] = useState<string | null>(null);
 
   return (
@@ -13,6 +14,7 @@ export default function SelectProductPage() {
       <StoreCandidateScreen
         items={items}
         busyAsin={busyAsin}
+        dataSource={dataSource}
         onSelect={async (asin) => {
           if (busyAsin) return;
           setBusyAsin(asin);

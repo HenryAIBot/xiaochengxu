@@ -6,6 +6,8 @@ import { FixtureCourtListenerConnector } from "./connectors/fixture-courtlistene
 import { FixtureUsptoTrademarkConnector } from "./connectors/fixture-uspto-trademark-connector.js";
 import { LiveAmazonListingConnector } from "./connectors/live-amazon-listing-connector.js";
 import { LiveCourtListenerConnector } from "./connectors/live-courtlistener-connector.js";
+import { LiveMarkbaseTrademarkConnector } from "./connectors/live-markbase-trademark-connector.js";
+import { LiveRainforestAmazonConnector } from "./connectors/live-rainforest-amazon-connector.js";
 import { LiveUsptoTrademarkConnector } from "./connectors/live-uspto-trademark-connector.js";
 import {
   createTokenBucketLimiter,
@@ -17,6 +19,7 @@ import { InfringementCheckService } from "./services/infringement-check-service.
 import { TroAlertService } from "./services/tro-alert-service.js";
 
 export * from "./cache.js";
+export * from "./env-loader.js";
 export * from "./rate-limit.js";
 export * from "./connectors/amazon-listing-connector.js";
 export * from "./connectors/courtlistener-connector.js";
@@ -25,6 +28,8 @@ export * from "./connectors/fixture-amazon-listing-connector.js";
 export * from "./connectors/fixture-courtlistener-connector.js";
 export * from "./connectors/fixture-uspto-trademark-connector.js";
 export * from "./connectors/live-courtlistener-connector.js";
+export * from "./connectors/live-markbase-trademark-connector.js";
+export * from "./connectors/live-rainforest-amazon-connector.js";
 export * from "./connectors/live-uspto-trademark-connector.js";
 export * from "./connectors/mock-amazon-listing-connector.js";
 export * from "./connectors/mock-courtlistener-connector.js";
@@ -97,7 +102,7 @@ function warnFixtureOnce() {
   if (fixtureWarningEmitted) return;
   fixtureWarningEmitted = true;
   console.warn(
-    "[@xiaochengxu/tools] One or more connectors are fixture — results are deterministic sample data, NOT live API calls. Set COURTLISTENER_API_TOKEN / USPTO_SEARCH_URL_TEMPLATE to enable live data.",
+    "[@xiaochengxu/tools] One or more connectors are fixture — results are deterministic sample data, NOT live API calls. Set COURTLISTENER_API_TOKEN, USPTO_SEARCH_PROVIDER=markbase or USPTO_SEARCH_URL_TEMPLATE, and RAINFOREST_API_KEY to enable live data.",
   );
 }
 
@@ -118,6 +123,123 @@ export interface ToolExecutorOverrides {
   courtListener?: { connector: CourtListenerPort; source: DataSource };
   uspto?: { connector: UsptoPort; source: DataSource };
   amazon?: { connector: AmazonPort; source: DataSource };
+}
+
+export interface DataSourceCapabilityStatus {
+  provider: "courtlistener" | "uspto" | "amazon";
+  capability:
+    | "court_search"
+    | "docket_entries"
+    | "trademark_search"
+    | "listing_lookup"
+    | "storefront_lookup";
+  dataSource: DataSource;
+  configured: boolean;
+  requiredEnv: string[];
+  optionalEnv: string[];
+  missingEnv: string[];
+}
+
+function configuredStatus(input: {
+  provider: DataSourceCapabilityStatus["provider"];
+  capability: DataSourceCapabilityStatus["capability"];
+  requiredEnv: string[];
+  optionalEnv: string[];
+  env?: NodeJS.ProcessEnv;
+}): DataSourceCapabilityStatus {
+  const env = input.env ?? process.env;
+  const missingEnv = input.requiredEnv.filter((key) => !env[key]);
+  const configured = missingEnv.length === 0;
+  return {
+    provider: input.provider,
+    capability: input.capability,
+    dataSource: configured ? DATA_SOURCE_LIVE : DATA_SOURCE_FIXTURE,
+    configured,
+    requiredEnv: input.requiredEnv,
+    optionalEnv: input.optionalEnv,
+    missingEnv,
+  };
+}
+
+export function describeDefaultDataSources(
+  env: NodeJS.ProcessEnv = process.env,
+): { items: DataSourceCapabilityStatus[] } {
+  const usptoStatus = (() => {
+    if (env.USPTO_SEARCH_URL_TEMPLATE) {
+      return configuredStatus({
+        provider: "uspto",
+        capability: "trademark_search",
+        requiredEnv: ["USPTO_SEARCH_URL_TEMPLATE"],
+        optionalEnv: ["USPTO_AUTH_HEADER"],
+        env,
+      });
+    }
+    if (env.USPTO_SEARCH_PROVIDER === "markbase") {
+      return {
+        provider: "uspto" as const,
+        capability: "trademark_search" as const,
+        dataSource: DATA_SOURCE_LIVE,
+        configured: true,
+        requiredEnv: ["USPTO_SEARCH_PROVIDER"],
+        optionalEnv: ["MARKBASE_API_BASE_URL", "MARKBASE_STATUS_CODES"],
+        missingEnv: [],
+      };
+    }
+    return {
+      provider: "uspto" as const,
+      capability: "trademark_search" as const,
+      dataSource: DATA_SOURCE_FIXTURE,
+      configured: false,
+      requiredEnv: [
+        "USPTO_SEARCH_URL_TEMPLATE or USPTO_SEARCH_PROVIDER=markbase",
+      ],
+      optionalEnv: ["USPTO_AUTH_HEADER", "MARKBASE_API_BASE_URL"],
+      missingEnv: [
+        "USPTO_SEARCH_URL_TEMPLATE or USPTO_SEARCH_PROVIDER=markbase",
+      ],
+    };
+  })();
+
+  return {
+    items: [
+      configuredStatus({
+        provider: "courtlistener",
+        capability: "court_search",
+        requiredEnv: ["COURTLISTENER_API_TOKEN"],
+        optionalEnv: ["COURTLISTENER_BASE_URL"],
+        env,
+      }),
+      configuredStatus({
+        provider: "courtlistener",
+        capability: "docket_entries",
+        requiredEnv: ["COURTLISTENER_API_TOKEN"],
+        optionalEnv: ["COURTLISTENER_BASE_URL"],
+        env,
+      }),
+      usptoStatus,
+      configuredStatus({
+        provider: "amazon",
+        capability: "listing_lookup",
+        requiredEnv:
+          env.RAINFOREST_API_KEY && !env.AMAZON_LISTING_URL_TEMPLATE
+            ? ["RAINFOREST_API_KEY"]
+            : ["AMAZON_LISTING_URL_TEMPLATE"],
+        optionalEnv: ["AMAZON_AUTH_HEADER"],
+        env,
+      }),
+      configuredStatus({
+        provider: "amazon",
+        capability: "storefront_lookup",
+        requiredEnv: [
+          ...(env.RAINFOREST_API_KEY && !env.AMAZON_LISTING_URL_TEMPLATE
+            ? ["RAINFOREST_API_KEY"]
+            : ["AMAZON_LISTING_URL_TEMPLATE", "AMAZON_STORE_URL_TEMPLATE"]),
+        ],
+        optionalEnv: ["AMAZON_AUTH_HEADER"],
+        env,
+      }),
+    ],
+  };
 }
 
 function applyProviderLimiter<T extends object>(
@@ -159,6 +281,21 @@ export function resolveAmazonConnector(override?: {
       source: DATA_SOURCE_LIVE,
     };
   }
+  const rainforestApiKey = process.env.RAINFOREST_API_KEY;
+  if (rainforestApiKey) {
+    const connector = new LiveRainforestAmazonConnector({
+      apiKey: rainforestApiKey,
+      baseUrl: process.env.RAINFOREST_API_BASE_URL,
+      amazonDomain: process.env.RAINFOREST_AMAZON_DOMAIN,
+    });
+    return {
+      connector: applyProviderLimiter("amazon", DATA_SOURCE_LIVE, connector, {
+        capacity: 5,
+        refillIntervalMs: 2000,
+      }),
+      source: DATA_SOURCE_LIVE,
+    };
+  }
   return {
     connector: new FixtureAmazonListingConnector(),
     source: DATA_SOURCE_FIXTURE,
@@ -175,6 +312,24 @@ export function resolveUsptoConnector(override?: {
     const connector = new LiveUsptoTrademarkConnector({
       urlTemplate,
       authHeader: process.env.USPTO_AUTH_HEADER,
+    });
+    return {
+      connector: applyProviderLimiter("uspto", DATA_SOURCE_LIVE, connector, {
+        capacity: 10,
+        refillIntervalMs: 1000,
+      }),
+      source: DATA_SOURCE_LIVE,
+    };
+  }
+  if (process.env.USPTO_SEARCH_PROVIDER === "markbase") {
+    const statusCodes = process.env.MARKBASE_STATUS_CODES
+      ? process.env.MARKBASE_STATUS_CODES.split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : undefined;
+    const connector = new LiveMarkbaseTrademarkConnector({
+      baseUrl: process.env.MARKBASE_API_BASE_URL,
+      statusCodes,
     });
     return {
       connector: applyProviderLimiter("uspto", DATA_SOURCE_LIVE, connector, {
@@ -277,14 +432,6 @@ export function createDefaultToolExecutor(config?: ToolExecutorConfig) {
   return async function runQueryTool(
     input: RunQueryToolInput,
   ): Promise<ToolResult> {
-    if (
-      courtListenerSource === DATA_SOURCE_FIXTURE ||
-      amazonSource === DATA_SOURCE_FIXTURE ||
-      usptoSource === DATA_SOURCE_FIXTURE
-    ) {
-      warnFixtureOnce();
-    }
-
     const cached = cache.get(cacheKey(input));
     if (cached) {
       return { ...cached.value, sourceFetchedAt: cached.fetchedAt };
@@ -294,6 +441,7 @@ export function createDefaultToolExecutor(config?: ToolExecutorConfig) {
     let result: ToolResult;
     switch (tool) {
       case "tro_alert": {
+        if (courtListenerSource === DATA_SOURCE_FIXTURE) warnFixtureOnce();
         const r = await troAlert.run(normalizedInput.normalizedValue);
         result = {
           level: r.preview.level,
@@ -306,6 +454,11 @@ export function createDefaultToolExecutor(config?: ToolExecutorConfig) {
         break;
       }
       case "infringement_check": {
+        const dataSource =
+          normalizedInput.kind === "asin"
+            ? mergeDataSources(amazonSource, usptoSource)
+            : usptoSource;
+        if (dataSource !== DATA_SOURCE_LIVE) warnFixtureOnce();
         const r = await infringement.run(
           normalizedInput.normalizedValue,
           normalizedInput.kind,
@@ -316,12 +469,13 @@ export function createDefaultToolExecutor(config?: ToolExecutorConfig) {
           evidence: r.preview.evidence,
           recommendedActions: r.preview.recommendedActions,
           extra: r.listing,
-          dataSource: mergeDataSources(amazonSource, usptoSource),
+          dataSource,
           sourceFetchedAt: "",
         };
         break;
       }
       case "case_progress": {
+        if (courtListenerSource === DATA_SOURCE_FIXTURE) warnFixtureOnce();
         const r = await caseProgress.run(normalizedInput.normalizedValue);
         result = {
           level: r.preview.level,
