@@ -7,11 +7,17 @@ import { FixtureUsptoTrademarkConnector } from "./connectors/fixture-uspto-trade
 import { LiveAmazonListingConnector } from "./connectors/live-amazon-listing-connector.js";
 import { LiveCourtListenerConnector } from "./connectors/live-courtlistener-connector.js";
 import { LiveUsptoTrademarkConnector } from "./connectors/live-uspto-trademark-connector.js";
+import {
+  createTokenBucketLimiter,
+  readLimiterConfig,
+  wrapConnectorWithLimiter,
+} from "./rate-limit.js";
 import { CaseProgressService } from "./services/case-progress-service.js";
 import { InfringementCheckService } from "./services/infringement-check-service.js";
 import { TroAlertService } from "./services/tro-alert-service.js";
 
 export * from "./cache.js";
+export * from "./rate-limit.js";
 export * from "./connectors/amazon-listing-connector.js";
 export * from "./connectors/courtlistener-connector.js";
 export * from "./connectors/uspto-trademark-connector.js";
@@ -114,6 +120,25 @@ export interface ToolExecutorOverrides {
   amazon?: { connector: AmazonPort; source: DataSource };
 }
 
+function applyProviderLimiter<T extends object>(
+  provider: string,
+  source: DataSource,
+  connector: T,
+  defaults: { capacity: number; refillIntervalMs: number },
+): T {
+  // Only rate-limit live connectors — fixtures are in-process.
+  if (source !== DATA_SOURCE_LIVE) return connector;
+  const opts = readLimiterConfig(provider, defaults);
+  const limiter = createTokenBucketLimiter(opts);
+  return wrapConnectorWithLimiter(
+    connector as unknown as Record<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >,
+    limiter,
+  ) as unknown as T;
+}
+
 export function resolveAmazonConnector(override?: {
   connector: AmazonPort;
   source: DataSource;
@@ -121,11 +146,15 @@ export function resolveAmazonConnector(override?: {
   if (override) return override;
   const listingUrlTemplate = process.env.AMAZON_LISTING_URL_TEMPLATE;
   if (listingUrlTemplate) {
+    const connector = new LiveAmazonListingConnector({
+      listingUrlTemplate,
+      storeUrlTemplate: process.env.AMAZON_STORE_URL_TEMPLATE,
+      authHeader: process.env.AMAZON_AUTH_HEADER,
+    });
     return {
-      connector: new LiveAmazonListingConnector({
-        listingUrlTemplate,
-        storeUrlTemplate: process.env.AMAZON_STORE_URL_TEMPLATE,
-        authHeader: process.env.AMAZON_AUTH_HEADER,
+      connector: applyProviderLimiter("amazon", DATA_SOURCE_LIVE, connector, {
+        capacity: 5,
+        refillIntervalMs: 2000,
       }),
       source: DATA_SOURCE_LIVE,
     };
@@ -143,10 +172,14 @@ export function resolveUsptoConnector(override?: {
   if (override) return override;
   const urlTemplate = process.env.USPTO_SEARCH_URL_TEMPLATE;
   if (urlTemplate) {
+    const connector = new LiveUsptoTrademarkConnector({
+      urlTemplate,
+      authHeader: process.env.USPTO_AUTH_HEADER,
+    });
     return {
-      connector: new LiveUsptoTrademarkConnector({
-        urlTemplate,
-        authHeader: process.env.USPTO_AUTH_HEADER,
+      connector: applyProviderLimiter("uspto", DATA_SOURCE_LIVE, connector, {
+        capacity: 10,
+        refillIntervalMs: 1000,
       }),
       source: DATA_SOURCE_LIVE,
     };
@@ -166,11 +199,17 @@ export function resolveCourtListenerConnector(override?: {
   }
   const token = process.env.COURTLISTENER_API_TOKEN;
   if (token) {
+    const connector = new LiveCourtListenerConnector({
+      token,
+      baseUrl: process.env.COURTLISTENER_BASE_URL,
+    });
     return {
-      connector: new LiveCourtListenerConnector({
-        token,
-        baseUrl: process.env.COURTLISTENER_BASE_URL,
-      }),
+      connector: applyProviderLimiter(
+        "courtlistener",
+        DATA_SOURCE_LIVE,
+        connector,
+        { capacity: 10, refillIntervalMs: 1000 },
+      ),
       source: DATA_SOURCE_LIVE,
     };
   }

@@ -2,6 +2,8 @@ export interface TrademarkSearchMark {
   owner: string;
   mark: string;
   status: string;
+  /** Permalink on tsdr.uspto.gov (or similar) when known. */
+  url?: string;
 }
 
 export class UsptoTrademarkConnector {

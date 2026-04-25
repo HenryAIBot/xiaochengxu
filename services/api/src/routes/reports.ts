@@ -1,10 +1,23 @@
 import { randomUUID } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifySchema } from "fastify";
 
 interface UnlockReportBody {
   email?: string;
   phone?: string;
 }
+
+const unlockReportSchema: FastifySchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      email: { type: "string", format: "email", maxLength: 200 },
+      phone: { type: "string", pattern: "^\\+?\\d{7,15}$" },
+    },
+    // No `required` — either (or both) can be supplied. Empty bodies
+    // land at the CONTACT_REQUIRED business error below.
+  },
+};
 
 interface StoredReportRow {
   id: string;
@@ -115,56 +128,65 @@ export async function registerReportRoutes(app: FastifyInstance) {
     return serializeReport(report);
   });
 
-  app.post("/api/reports/:reportId/unlock", async (request, reply) => {
-    const { reportId } = request.params as { reportId: string };
-    const report = await fetchReport(app, reportId);
-    const userId = request.user?.id ?? null;
+  app.post(
+    "/api/reports/:reportId/unlock",
+    {
+      schema: unlockReportSchema,
+      config: app.rateLimits.unlockReport
+        ? { rateLimit: app.rateLimits.unlockReport }
+        : undefined,
+    },
+    async (request, reply) => {
+      const { reportId } = request.params as { reportId: string };
+      const report = await fetchReport(app, reportId);
+      const userId = request.user?.id ?? null;
 
-    if (!canAccessReport(report, userId)) {
-      return reply.code(404).send({
-        code: "REPORT_NOT_FOUND",
-        message: "报告不存在",
-      });
-    }
+      if (!canAccessReport(report, userId)) {
+        return reply.code(404).send({
+          code: "REPORT_NOT_FOUND",
+          message: "报告不存在",
+        });
+      }
 
-    const body = (request.body ?? {}) as UnlockReportBody;
-    const email = body.email?.trim() || null;
-    const phone = body.phone?.trim() || null;
+      const body = (request.body ?? {}) as UnlockReportBody;
+      const email = body.email?.trim() || null;
+      const phone = body.phone?.trim() || null;
 
-    if (!email && !phone) {
-      return reply.code(400).send({
-        code: "CONTACT_REQUIRED",
-        message: "请输入邮箱或手机号",
-      });
-    }
+      if (!email && !phone) {
+        return reply.code(400).send({
+          code: "CONTACT_REQUIRED",
+          message: "请输入邮箱或手机号",
+        });
+      }
 
-    await app.db
-      .prepare(
-        `INSERT INTO leads (
+      await app.db
+        .prepare(
+          `INSERT INTO leads (
           id, email, phone, source_report_id, source_task_id, source_tool, source_input, created_at, user_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        randomUUID(),
-        email,
-        phone,
-        reportId,
-        report.taskId,
-        report.tool,
-        report.normalizedInput,
-        new Date().toISOString(),
-        request.user?.id ?? null,
-      );
+        )
+        .run(
+          randomUUID(),
+          email,
+          phone,
+          reportId,
+          report.taskId,
+          report.tool,
+          report.normalizedInput,
+          new Date().toISOString(),
+          request.user?.id ?? null,
+        );
 
-    const unlockedValue = app.db.dialect === "postgres" ? true : 1;
-    await app.db
-      .prepare("UPDATE reports SET unlocked = ? WHERE id = ?")
-      .run(unlockedValue, reportId);
+      const unlockedValue = app.db.dialect === "postgres" ? true : 1;
+      await app.db
+        .prepare("UPDATE reports SET unlocked = ? WHERE id = ?")
+        .run(unlockedValue, reportId);
 
-    return {
-      id: reportId,
-      unlocked: true,
-      fullReportUrl: `/api/reports/${reportId}`,
-    };
-  });
+      return {
+        id: reportId,
+        unlocked: true,
+        fullReportUrl: `/api/reports/${reportId}`,
+      };
+    },
+  );
 }

@@ -1,6 +1,8 @@
 export interface CourtListenerSearchResult {
   caseName: string;
   snippet: string;
+  /** Permalink back to courtlistener.com (when known). */
+  url?: string;
 }
 
 export interface CourtListenerDocketEntry {

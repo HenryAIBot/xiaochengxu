@@ -1,6 +1,17 @@
 import { Button, Text, View } from "@tarojs/components";
 import { useState } from "react";
 
+const MONITOR_INTERVAL_PRESETS: Array<{
+  seconds: number;
+  label: string;
+}> = [
+  { seconds: 300, label: "5 分钟" },
+  { seconds: 900, label: "15 分钟" },
+  { seconds: 3600, label: "1 小时" },
+  { seconds: 14_400, label: "4 小时" },
+  { seconds: 86_400, label: "每天" },
+];
+
 const BADGE_CLASS: Record<string, string> = {
   clear: "badge badge--clear",
   watch: "badge badge--watch",
@@ -49,18 +60,24 @@ export function ResultScreen({
   actions: string[];
   dataSource?: string;
   onUnlockReport(): void;
-  onStartMonitor(): void | Promise<void>;
+  onStartMonitor(input: {
+    tickIntervalSeconds: number;
+  }): void | Promise<void>;
   onContactAdvisor(): void;
   onActionTap?: (action: string) => void;
 }) {
   const badgeText = dataSourceBadge(dataSource);
   const [isStartingMonitor, setIsStartingMonitor] = useState(false);
+  const [monitorPickerOpen, setMonitorPickerOpen] = useState(false);
+  // Default: every 15 minutes — sane middle ground for risk-change cadence.
+  const [tickIntervalSeconds, setTickIntervalSeconds] = useState(900);
 
   async function handleStartMonitor() {
     if (isStartingMonitor) return;
     setIsStartingMonitor(true);
     try {
-      await onStartMonitor();
+      await onStartMonitor({ tickIntervalSeconds });
+      setMonitorPickerOpen(false);
     } finally {
       setIsStartingMonitor(false);
     }
@@ -93,6 +110,18 @@ export function ResultScreen({
                 来源：{item.source} · 命中字段：{item.matchedField}
               </Text>
               <Text className="evidence-item__body">{item.description}</Text>
+              {item.originalUrl ? (
+                <Text
+                  className="evidence-item__link"
+                  onClick={() => {
+                    if (typeof window !== "undefined" && item.originalUrl) {
+                      window.open(item.originalUrl, "_blank");
+                    }
+                  }}
+                >
+                  查看原始来源 ↗
+                </Text>
+              ) : null}
             </View>
           ))
         ) : (
@@ -133,6 +162,54 @@ export function ResultScreen({
         </Button>
       </View>
 
+      {monitorPickerOpen ? (
+        <View className="card card--highlight">
+          <Text className="card__title">选择检测频率</Text>
+          <Text className="card__text">
+            频率越密耗时越多，一般 15 分钟或 1 小时够用
+          </Text>
+          <View className="tool-selector">
+            {MONITOR_INTERVAL_PRESETS.map((preset) => {
+              const active = tickIntervalSeconds === preset.seconds;
+              return (
+                <Button
+                  key={preset.seconds}
+                  className={
+                    active
+                      ? "tool-selector__btn tool-selector__btn--active"
+                      : "tool-selector__btn"
+                  }
+                  disabled={isStartingMonitor}
+                  onClick={() => setTickIntervalSeconds(preset.seconds)}
+                >
+                  {preset.label}
+                </Button>
+              );
+            })}
+          </View>
+          <View className="list-item__actions" style={{ marginTop: "10px" }}>
+            <Button
+              className={
+                isStartingMonitor
+                  ? "btn btn--primary btn--block btn--disabled"
+                  : "btn btn--primary btn--block"
+              }
+              disabled={isStartingMonitor}
+              onClick={() => void handleStartMonitor()}
+            >
+              {isStartingMonitor ? "加入中…" : "确认加入监控"}
+            </Button>
+            <Button
+              className="btn btn--ghost btn--block"
+              disabled={isStartingMonitor}
+              onClick={() => setMonitorPickerOpen(false)}
+            >
+              取消
+            </Button>
+          </View>
+        </View>
+      ) : null}
+
       <View className="list-item__actions">
         <Button
           className={
@@ -141,7 +218,11 @@ export function ResultScreen({
               : "btn btn--secondary btn--block"
           }
           disabled={isStartingMonitor}
-          onClick={() => void handleStartMonitor()}
+          onClick={() =>
+            monitorPickerOpen
+              ? void handleStartMonitor()
+              : setMonitorPickerOpen(true)
+          }
         >
           {isStartingMonitor ? "加入中…" : "加入监控"}
         </Button>

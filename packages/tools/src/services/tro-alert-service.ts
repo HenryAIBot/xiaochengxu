@@ -17,6 +17,7 @@ export class TroAlertService {
         reason: hasTro
           ? `发现相关临时限制令案件：${result.caseName}`
           : `发现相关法院案件：${result.caseName}`,
+        originalUrl: result.url,
       };
     });
 

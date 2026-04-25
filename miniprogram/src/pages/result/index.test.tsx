@@ -76,14 +76,20 @@ describe("ResultPage", () => {
     expect(screen.getByText("演示数据（非真实 API）")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "加入监控" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认加入监控" }));
 
     await waitFor(() => {
-      expect(taro.request).toHaveBeenCalledWith({
-        url: "http://127.0.0.1:3000/api/monitors",
-        method: "POST",
-        header: { "Content-Type": "application/json" },
-        data: { targetKind: "brand", targetValue: "nike" },
-      });
+      expect(taro.request).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: "http://127.0.0.1:3000/api/monitors",
+          method: "POST",
+          data: {
+            targetKind: "brand",
+            targetValue: "nike",
+            tickIntervalSeconds: 900,
+          },
+        }),
+      );
     });
     expect(taro.switchTab).toHaveBeenCalledWith({
       url: "/pages/monitor/index",

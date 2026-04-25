@@ -26,6 +26,9 @@ interface MarkRaw {
   wordmark?: string;
   status?: string;
   registrationStatus?: string;
+  url?: string;
+  detailUrl?: string;
+  serialNumber?: string;
 }
 
 interface Paginated<T> {
@@ -75,11 +78,21 @@ export class LiveUsptoTrademarkConnector {
     const raws = pickMarks(payload).slice(0, this.maxResults);
 
     const marks: TrademarkSearchMark[] = raws
-      .map((raw) => ({
-        owner: raw.owner ?? "",
-        mark: (raw.mark ?? raw.wordmark ?? "").toUpperCase(),
-        status: (raw.status ?? raw.registrationStatus ?? "LIVE").toUpperCase(),
-      }))
+      .map((raw) => {
+        const tsdrUrl = raw.serialNumber
+          ? `https://tsdr.uspto.gov/#caseNumber=${raw.serialNumber}&caseType=SERIAL_NO&searchType=statusSearch`
+          : undefined;
+        return {
+          owner: raw.owner ?? "",
+          mark: (raw.mark ?? raw.wordmark ?? "").toUpperCase(),
+          status: (
+            raw.status ??
+            raw.registrationStatus ??
+            "LIVE"
+          ).toUpperCase(),
+          url: raw.detailUrl ?? raw.url ?? tsdrUrl,
+        };
+      })
       .filter((m) => m.owner && m.mark);
 
     return { marks };

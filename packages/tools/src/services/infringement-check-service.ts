@@ -2,7 +2,7 @@ import { type DetectionSignal, buildPreview } from "@xiaochengxu/core";
 import type { InputKind } from "@xiaochengxu/core";
 
 interface TrademarkSearchPayload {
-  marks: Array<{ owner: string; mark: string; status: string }>;
+  marks: Array<{ owner: string; mark: string; status: string; url?: string }>;
 }
 
 interface InfringementPorts {
@@ -43,7 +43,7 @@ function toTrademarkEvidence(
 ): DetectionSignal[] {
   const groupedMarks = new Map<
     string,
-    { owner: string; status: string; marks: string[] }
+    { owner: string; status: string; marks: string[]; url?: string }
   >();
 
   for (const mark of marks) {
@@ -54,6 +54,7 @@ function toTrademarkEvidence(
       if (!existing.marks.includes(mark.mark)) {
         existing.marks.push(mark.mark);
       }
+      if (!existing.url && mark.url) existing.url = mark.url;
       continue;
     }
 
@@ -61,6 +62,7 @@ function toTrademarkEvidence(
       owner: mark.owner,
       status: mark.status,
       marks: [mark.mark],
+      url: mark.url,
     });
   }
 
@@ -68,6 +70,7 @@ function toTrademarkEvidence(
     source: "uspto",
     level: group.status === "LIVE" ? "suspected_high" : "watch",
     reason: formatTrademarkReason(group.owner, group.status, group.marks),
+    originalUrl: group.url,
   }));
 }
 
@@ -107,6 +110,7 @@ export class InfringementCheckService {
       source: "uspto",
       level: mark.status === "LIVE" ? "suspected_high" : "watch",
       reason: formatSingleTrademarkReason(mark),
+      originalUrl: mark.url,
     }));
 
     return {

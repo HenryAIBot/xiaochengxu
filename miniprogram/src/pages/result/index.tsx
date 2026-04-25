@@ -148,11 +148,12 @@ export default function ResultPage() {
             url: `/pages/report/index?id=${viewModel.reportId}`,
           })
         }
-        onStartMonitor={async () => {
+        onStartMonitor={async ({ tickIntervalSeconds }) => {
           try {
-            const m = (await createMonitor(viewModel.monitorTarget)) as {
-              id?: string;
-            } | null;
+            const m = (await createMonitor({
+              ...viewModel.monitorTarget,
+              tickIntervalSeconds,
+            })) as { id?: string } | null;
             if (!m || typeof m.id !== "string") {
               throw new Error("创建监控失败");
             }

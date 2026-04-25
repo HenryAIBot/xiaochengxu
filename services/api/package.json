@@ -9,7 +9,10 @@
     "db:migrate:pg": "tsx src/scripts/apply-postgres-schema.ts"
   },
   "dependencies": {
+    "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.6",
     "@xiaochengxu/core": "workspace:*",
     "@xiaochengxu/queue": "workspace:*",
     "@xiaochengxu/tools": "workspace:*",

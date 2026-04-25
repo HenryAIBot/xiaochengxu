@@ -31,20 +31,19 @@ services:
       timeout: 3s
       retries: 10
 
+  # Full stack — run with `docker compose --profile app up`.
   api:
     build:
       context: .
       dockerfile: services/api/Dockerfile
-    # Uncomment to enable; pulls image on `docker compose up --build api`.
     profiles: ["app"]
     environment:
       API_PORT: "3000"
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: ${DATABASE_URL:-postgres://xiaochengxu:dev-local@postgres:5432/xiaochengxu}
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
       SMTP_FROM: alerts@xiaochengxu.local
-      # Uncomment to switch to Postgres (run db:migrate:pg first):
-      # DATABASE_URL: postgres://xiaochengxu:dev-local@postgres:5432/xiaochengxu
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev-internal-secret}
       WECHAT_APPID: ${WECHAT_APPID:-}
       WECHAT_SECRET: ${WECHAT_SECRET:-}
@@ -54,6 +53,18 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "fetch('http://127.0.0.1:3000/health')
+          .then(r => r.ok ? 0 : process.exit(1))
+          .catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   jobs:
     build:
@@ -73,7 +84,36 @@ services:
       redis:
         condition: service_healthy
       api:
-        condition: service_started
+        condition: service_healthy
+
+  # One-shot smoke test: exits 0 if the happy path works end-to-end.
+  # Run: `docker compose --profile app --profile smoke up --abort-on-container-exit smoke`
+  smoke:
+    image: curlimages/curl:8.10.1
+    profiles: ["smoke"]
+    depends_on:
+      api:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        echo "1) POST /api/auth/anonymous"
+        TOKEN=$$(curl -sf -X POST http://api:3000/api/auth/anonymous | sed -E 's/.*"token":"([^"]+)".*/\1/')
+        test -n "$$TOKEN"
+        echo "   token=$${TOKEN:0:8}…"
+        echo "2) POST /api/query-tasks"
+        TASK=$$(curl -sf -X POST http://api:3000/api/query-tasks \
+          -H "Authorization: Bearer $$TOKEN" -H "Content-Type: application/json" \
+          -d '{"tool":"infringement_check","input":"nike"}' \
+          | sed -E 's/.*"taskId":"([^"]+)".*/\1/')
+        test -n "$$TASK"
+        echo "   taskId=$$TASK"
+        echo "3) GET /api/stats"
+        curl -sf -H "Authorization: Bearer $$TOKEN" http://api:3000/api/stats
+        echo ""
+        echo "smoke OK"
 
 volumes:
   postgres_data:

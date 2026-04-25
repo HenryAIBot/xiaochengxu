@@ -16,6 +16,7 @@ export interface ReportDetail {
       source: string;
       level: string;
       reason: string;
+      originalUrl?: string;
     }>;
     recommendedActions: string[];
     extra: unknown;
@@ -35,6 +36,7 @@ export interface FullReportViewModel {
     source: string;
     level: string;
     reason: string;
+    originalUrl?: string;
   }>;
   actions: string[];
   dataSource?: string;
@@ -73,6 +75,7 @@ export function toFullReportViewModel(
       source: SOURCE_LABELS[item.source] ?? item.source,
       level: LEVEL_LABELS[item.level] ?? item.level,
       reason: item.reason,
+      originalUrl: item.originalUrl,
     })),
     actions:
       report.preview.recommendedActions.length > 0

@@ -85,7 +85,12 @@ export async function registerMonitorRoutes(app: FastifyInstance) {
 
   app.post(
     "/api/monitors",
-    { schema: createMonitorSchema },
+    {
+      schema: createMonitorSchema,
+      config: app.rateLimits.createMonitor
+        ? { rateLimit: app.rateLimits.createMonitor }
+        : undefined,
+    },
     async (request, reply) => {
       const body = request.body as CreateMonitorBody;
       const monitor = {

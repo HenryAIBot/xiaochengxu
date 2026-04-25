@@ -39,6 +39,7 @@ export interface ResultViewModel {
     source: string;
     matchedField: string;
     description: string;
+    originalUrl?: string;
   }>;
   actions: string[];
   dataSource?: string;
@@ -54,7 +55,12 @@ export interface CompletedTaskStatus {
     level: string;
     levelLabel: string;
     summary: string;
-    evidence: Array<{ source: string; level: string; reason: string }>;
+    evidence: Array<{
+      source: string;
+      level: string;
+      reason: string;
+      originalUrl?: string;
+    }>;
     recommendedActions: string[];
     dataSource?: string;
     sourceFetchedAt?: string | null;
@@ -148,6 +154,7 @@ export function toResultViewModel(result: QueryTaskResult): ResultViewModel {
       source: SOURCE_LABELS[item.source] ?? item.source,
       matchedField: "风险信号",
       description: item.reason,
+      originalUrl: item.originalUrl,
     })),
     actions:
       result.recommendedActions.length > 0

@@ -73,11 +73,15 @@ describe("ResultScreen", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "解锁完整报告" }));
+    // First "加入监控" tap opens the interval picker; second confirm
+    // fires the callback with the chosen tickIntervalSeconds.
     fireEvent.click(screen.getByRole("button", { name: "加入监控" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认加入监控" }));
     fireEvent.click(screen.getByRole("button", { name: "联系顾问" }));
 
     expect(onUnlockReport).toHaveBeenCalledTimes(1);
     expect(onStartMonitor).toHaveBeenCalledTimes(1);
+    expect(onStartMonitor).toHaveBeenCalledWith({ tickIntervalSeconds: 900 });
     expect(onContactAdvisor).toHaveBeenCalledTimes(1);
   });
 

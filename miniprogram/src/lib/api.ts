@@ -194,6 +194,30 @@ export async function listMonitors(): Promise<{ items: MonitorListItem[] }> {
   return response.data as { items: MonitorListItem[] };
 }
 
+export interface StatsResponse {
+  activeMonitors: number;
+  detectionsThisWeek: number;
+  riskWarnings: number;
+  confirmedTro: number;
+}
+
+export async function getStats(): Promise<StatsResponse> {
+  const response = await Taro.request({
+    url: `${API_BASE}/api/stats`,
+    method: "GET",
+    header: await buildAuthHeader({}),
+  });
+  const payload = response.data as StatsResponse | null;
+  return (
+    payload ?? {
+      activeMonitors: 0,
+      detectionsThisWeek: 0,
+      riskWarnings: 0,
+      confirmedTro: 0,
+    }
+  );
+}
+
 export async function updateMonitorStatus(
   id: string,
   status: "active" | "paused",

@@ -10,6 +10,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "build": "pnpm -r build"
   },
   "pnpm": {
@@ -30,6 +31,7 @@
     "@tarojs/cli": "^4.2.0",
     "@testing-library/react": "^16.2.0",
     "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^4.1.5",
     "babel-preset-taro": "^4.2.0",
     "jsdom": "^26.0.0",
     "node-gyp": "^12.2.0",

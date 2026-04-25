@@ -44,6 +44,24 @@ async function main() {
     ? createRedisConnection(process.env.RATE_LIMIT_REDIS_URL)
     : undefined;
 
+  function readRouteLimit(
+    prefix: string,
+    defaultMax: number,
+    defaultWindow: string,
+  ) {
+    const max = Number(process.env[`RATE_LIMIT_${prefix}_MAX`] ?? defaultMax);
+    const timeWindow =
+      process.env[`RATE_LIMIT_${prefix}_WINDOW`] ?? defaultWindow;
+    return { max, timeWindow };
+  }
+  const perRouteRateLimits = {
+    createQueryTask: readRouteLimit("QUERY", 10, "1 minute"),
+    createMonitor: readRouteLimit("MONITOR", 20, "1 minute"),
+    unlockReport: readRouteLimit("UNLOCK", 10, "1 minute"),
+    createConsultation: readRouteLimit("CONSULTATION", 5, "1 minute"),
+    anonymousAuth: readRouteLimit("AUTH", 10, "5 minutes"),
+  };
+
   const wechatAppId = process.env.WECHAT_APPID;
   const wechatAppSecret = process.env.WECHAT_SECRET;
   const wechat =
@@ -70,6 +88,7 @@ async function main() {
       timeWindow: rateLimitWindow,
       redis: rateLimitRedis,
     },
+    perRouteRateLimits,
     wechat,
     errorReporter,
   });

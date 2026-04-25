@@ -105,7 +105,12 @@ function hydrate(row: ConsultationRow) {
 export async function registerConsultationRoutes(app: FastifyInstance) {
   app.post(
     "/api/consultations",
-    { schema: createConsultationSchema },
+    {
+      schema: createConsultationSchema,
+      config: app.rateLimits.createConsultation
+        ? { rateLimit: app.rateLimits.createConsultation }
+        : undefined,
+    },
     async (request, reply) => {
       const body = request.body as CreateConsultationBody;
       const now = new Date().toISOString();

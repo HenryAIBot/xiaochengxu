@@ -1,12 +1,22 @@
 import { View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
-import { HomeScreen } from "../../components/home-screen";
-import { createQueryTask, listStoreProducts } from "../../lib/api";
+import { useEffect, useState } from "react";
+import { HomeScreen, type HomeStats } from "../../components/home-screen";
+import { createQueryTask, getStats, listStoreProducts } from "../../lib/api";
 
 export default function HomePage() {
+  const [stats, setStats] = useState<HomeStats | null>(null);
+
+  useEffect(() => {
+    void getStats()
+      .then(setStats)
+      .catch(() => setStats(null));
+  }, []);
+
   return (
     <View>
       <HomeScreen
+        stats={stats}
         onSubmit={async (payload) => {
           if (!payload.input) {
             Taro.showToast({

@@ -40,18 +40,26 @@ async function upsertByOpenId(
 
 export function registerAuthRoutes(options: AuthRouteOptions = {}) {
   return async (app: FastifyInstance) => {
-    app.post("/api/auth/anonymous", async (_request, reply) => {
-      const now = new Date().toISOString();
-      const id = randomUUID();
-      const token = newToken();
-      await app.db
-        .prepare(
-          `INSERT INTO users (id, token, created_at, last_seen_at)
+    app.post(
+      "/api/auth/anonymous",
+      {
+        config: app.rateLimits.anonymousAuth
+          ? { rateLimit: app.rateLimits.anonymousAuth }
+          : undefined,
+      },
+      async (_request, reply) => {
+        const now = new Date().toISOString();
+        const id = randomUUID();
+        const token = newToken();
+        await app.db
+          .prepare(
+            `INSERT INTO users (id, token, created_at, last_seen_at)
            VALUES (?, ?, ?, ?)`,
-        )
-        .run(id, token, now, now);
-      return reply.code(201).send({ userId: id, token });
-    });
+          )
+          .run(id, token, now, now);
+        return reply.code(201).send({ userId: id, token });
+      },
+    );
 
     app.post<{ Body: { code: string } }>(
       "/api/auth/wechat",

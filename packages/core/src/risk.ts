@@ -5,6 +5,8 @@ export interface DetectionSignal {
   source: string;
   level: RiskLevel;
   reason: string;
+  /** Optional external URL the seller can open to see the raw evidence. */
+  originalUrl?: string;
 }
 
 const LEVEL_ORDER: RiskLevel[] = [

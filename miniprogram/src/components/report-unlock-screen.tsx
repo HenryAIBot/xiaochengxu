@@ -181,6 +181,18 @@ function FullReportContent({
               <Text className="evidence-item__title">{item.source}</Text>
               <Text className="evidence-item__source">等级：{item.level}</Text>
               <Text className="evidence-item__body">{item.reason}</Text>
+              {item.originalUrl ? (
+                <Text
+                  className="evidence-item__link"
+                  onClick={() => {
+                    if (typeof window !== "undefined" && item.originalUrl) {
+                      window.open(item.originalUrl, "_blank");
+                    }
+                  }}
+                >
+                  查看原始来源 ↗
+                </Text>
+              ) : null}
             </View>
           ))
         ) : (

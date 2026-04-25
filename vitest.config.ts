@@ -16,6 +16,31 @@ export default defineConfig({
     },
   },
   test: {
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html", "lcov"],
+      include: [
+        "packages/*/src/**/*.ts",
+        "services/*/src/**/*.ts",
+        "miniprogram/src/**/*.{ts,tsx}",
+      ],
+      exclude: [
+        "**/node_modules/**",
+        "**/dist/**",
+        "**/*.d.ts",
+        "**/test/**",
+        "**/*.test.{ts,tsx}",
+        "miniprogram/config/**",
+        "services/*/src/server.ts",
+        "services/*/src/scripts/**",
+      ],
+      thresholds: {
+        lines: 60,
+        functions: 60,
+        branches: 55,
+        statements: 60,
+      },
+    },
     projects: [
       {
         extends: true,

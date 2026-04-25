@@ -22,6 +22,8 @@ interface SearchResultRaw {
   snippet?: string;
   docketNumber?: string;
   docket_number?: string;
+  absolute_url?: string;
+  absoluteUrl?: string;
 }
 
 interface DocketEntryRaw {
@@ -84,10 +86,14 @@ export class LiveCourtListenerConnector implements CourtListenerPort {
 
     const results: CourtListenerSearchResult[] = (payload.results ?? [])
       .slice(0, this.maxResults)
-      .map((raw) => ({
-        caseName: pickString(raw.caseName, raw.case_name),
-        snippet: pickString(raw.snippet),
-      }))
+      .map((raw) => {
+        const relative = pickString(raw.absolute_url, raw.absoluteUrl);
+        return {
+          caseName: pickString(raw.caseName, raw.case_name),
+          snippet: pickString(raw.snippet),
+          url: relative ? `${this.baseUrl}${relative}` : undefined,
+        };
+      })
       .filter((r) => r.caseName.length > 0);
 
     return { results };

@@ -4,7 +4,7 @@ import {
   type ToolName,
   normalizeInput,
 } from "@xiaochengxu/core";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifySchema } from "fastify";
 import { QueryTaskRepository } from "../repositories/query-task-repository.js";
 
 interface QueryTaskBody {
@@ -12,24 +12,20 @@ interface QueryTaskBody {
   input: string;
 }
 
-const TOOL_NAMES = new Set<ToolName>([
-  "infringement_check",
-  "tro_alert",
-  "case_progress",
-]);
-
-function isQueryTaskBody(body: unknown): body is QueryTaskBody {
-  if (typeof body !== "object" || body === null) {
-    return false;
-  }
-
-  const candidate = body as Record<string, unknown>;
-  return (
-    typeof candidate.tool === "string" &&
-    TOOL_NAMES.has(candidate.tool as ToolName) &&
-    typeof candidate.input === "string"
-  );
-}
+const createQueryTaskSchema: FastifySchema = {
+  body: {
+    type: "object",
+    required: ["tool", "input"],
+    additionalProperties: false,
+    properties: {
+      tool: {
+        type: "string",
+        enum: ["infringement_check", "tro_alert", "case_progress"],
+      },
+      input: { type: "string", minLength: 1, maxLength: 500 },
+    },
+  },
+};
 
 const RISK_LABELS: Record<string, string> = {
   clear: "安全",
@@ -91,44 +87,47 @@ function parseJsonValue(raw: unknown): unknown {
 }
 
 export async function registerQueryTaskRoutes(app: FastifyInstance) {
-  app.post("/api/query-tasks", async (request, reply) => {
-    if (!isQueryTaskBody(request.body)) {
-      return reply.code(400).send({
-        code: "INVALID_REQUEST",
-        message: "请求内容必须包含检测工具和输入内容",
-      });
-    }
+  app.post(
+    "/api/query-tasks",
+    {
+      schema: createQueryTaskSchema,
+      config: app.rateLimits.createQueryTask
+        ? { rateLimit: app.rateLimits.createQueryTask }
+        : undefined,
+    },
+    async (request, reply) => {
+      const body = request.body as QueryTaskBody;
+      const repository = new QueryTaskRepository(app.db);
+      let normalizedInput: NormalizedInput;
 
-    const repository = new QueryTaskRepository(app.db);
-    let normalizedInput: NormalizedInput;
-
-    try {
-      normalizedInput = normalizeInput(request.body.input);
-    } catch (error) {
-      if (error instanceof BlankInputError) {
-        return reply.code(400).send({
-          code: error.code,
-          message: error.message,
-        });
+      try {
+        normalizedInput = normalizeInput(body.input);
+      } catch (error) {
+        if (error instanceof BlankInputError) {
+          return reply.code(400).send({
+            code: error.code,
+            message: error.message,
+          });
+        }
+        throw error;
       }
-      throw error;
-    }
 
-    const task = await repository.create({
-      tool: request.body.tool,
-      rawInput: request.body.input,
-      normalizedInput,
-      userId: request.user?.id ?? null,
-    });
+      const task = await repository.create({
+        tool: body.tool,
+        rawInput: body.input,
+        normalizedInput,
+        userId: request.user?.id ?? null,
+      });
 
-    await app.queue.enqueueQuery({ taskId: task.id });
+      await app.queue.enqueueQuery({ taskId: task.id });
 
-    return reply.code(202).send({
-      taskId: task.id,
-      status: "pending",
-      normalizedInput,
-    });
-  });
+      return reply.code(202).send({
+        taskId: task.id,
+        status: "pending",
+        normalizedInput,
+      });
+    },
+  );
 
   app.get("/api/query-tasks/:taskId", async (request, reply) => {
     const { taskId } = request.params as { taskId: string };

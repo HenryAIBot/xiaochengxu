@@ -21,10 +21,19 @@ function readInputValue(event: {
   return event.detail?.value ?? event.target?.value ?? "";
 }
 
+export interface HomeStats {
+  activeMonitors: number;
+  detectionsThisWeek: number;
+  riskWarnings: number;
+  confirmedTro: number;
+}
+
 export function HomeScreen({
   onSubmit,
+  stats,
 }: {
   onSubmit(input: { tool: Tool; input: string }): Promise<unknown> | unknown;
+  stats?: HomeStats | null;
 }) {
   const [tool, setTool] = useState<Tool>("infringement_check");
   const [value, setValue] = useState("");
@@ -95,19 +104,23 @@ export function HomeScreen({
 
         <View className="stats-grid">
           <View className="stat-card">
-            <Text className="stat-card__num">3</Text>
+            <Text className="stat-card__num">
+              {stats?.activeMonitors ?? "—"}
+            </Text>
             <Text className="stat-card__label">活跃监控</Text>
           </View>
           <View className="stat-card">
-            <Text className="stat-card__num">12</Text>
+            <Text className="stat-card__num">
+              {stats?.detectionsThisWeek ?? "—"}
+            </Text>
             <Text className="stat-card__label">本周检测</Text>
           </View>
           <View className="stat-card">
-            <Text className="stat-card__num">2</Text>
+            <Text className="stat-card__num">{stats?.riskWarnings ?? "—"}</Text>
             <Text className="stat-card__label">风险预警</Text>
           </View>
           <View className="stat-card">
-            <Text className="stat-card__num">0</Text>
+            <Text className="stat-card__num">{stats?.confirmedTro ?? "—"}</Text>
             <Text className="stat-card__label">已确认 TRO</Text>
           </View>
         </View>

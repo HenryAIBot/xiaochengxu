@@ -1,4 +1,7 @@
+import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import type { QueueClient, Redis } from "@xiaochengxu/queue";
 import Fastify from "fastify";
 import { type DatabaseAdapter, SqliteAdapter } from "./lib/db-adapter.js";
@@ -22,13 +25,28 @@ import { registerMessageRoutes } from "./routes/messages.js";
 import { registerMonitorRoutes } from "./routes/monitors.js";
 import { registerQueryTaskRoutes } from "./routes/query-tasks.js";
 import { registerReportRoutes } from "./routes/reports.js";
+import { registerStatsRoutes } from "./routes/stats.js";
 import { registerStorefrontRoutes } from "./routes/storefronts.js";
+
+export interface RouteRateLimitOverride {
+  max: number;
+  timeWindow: number | string;
+}
+
+export interface PerRouteRateLimits {
+  createQueryTask?: RouteRateLimitOverride;
+  createMonitor?: RouteRateLimitOverride;
+  unlockReport?: RouteRateLimitOverride;
+  createConsultation?: RouteRateLimitOverride;
+  anonymousAuth?: RouteRateLimitOverride;
+}
 
 declare module "fastify" {
   interface FastifyInstance {
     db: DatabaseAdapter;
     queue: QueueClient;
     internalToken: string | null;
+    rateLimits: PerRouteRateLimits;
   }
 
   interface FastifyRequest {
@@ -52,6 +70,11 @@ export interface BuildAppOptions {
     redis?: Redis;
   } | null;
   /**
+   * Per-route overrides. Only applied when `rateLimit` is also set.
+   * Any route not listed inherits the global max/timeWindow.
+   */
+  perRouteRateLimits?: PerRouteRateLimits;
+  /**
    * Optional hook called after every request; used for audit logging.
    * Defaults to a structured console.log in production; tests can inject
    * a spy or pass `null` to disable.
@@ -70,6 +93,16 @@ export interface BuildAppOptions {
    * this package to the Sentry SDK. Pass `null` to disable entirely.
    */
   errorReporter?: ErrorReporter | null;
+  /**
+   * Security headers (@fastify/helmet). Defaults to enabled. Tests or
+   * tightly-controlled envs can pass `false`.
+   */
+  helmet?: boolean;
+  /**
+   * Serve /docs + emit openapi.json from registered JSON Schemas.
+   * Defaults to enabled. Pass `false` to strip in prod if you want.
+   */
+  openApi?: boolean;
 }
 
 export interface AuditLogEntry {
@@ -135,7 +168,33 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.decorate("db", db);
   app.decorate("queue", queue);
   app.decorate("internalToken", internalToken);
+  app.decorate("rateLimits", options.perRouteRateLimits ?? {});
   app.decorateRequest("user", null);
+
+  if (options.helmet !== false) {
+    // JSON API only — drop the browsery CSP that would otherwise block
+    // swagger-ui + fonts. contentSecurityPolicy:false keeps response headers
+    // useful (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, …)
+    // without breaking docs tooling.
+    app.register(helmet, {
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    });
+  }
+
+  if (options.openApi !== false) {
+    app.register(swagger, {
+      openapi: {
+        info: {
+          title: "xiaochengxu API",
+          version: "0.0.1",
+          description:
+            "Internal + public endpoints for the TRO risk mini-program",
+        },
+      },
+    });
+    app.register(swaggerUi, { routePrefix: "/docs" });
+  }
 
   if (options.rateLimit) {
     app.register(rateLimit, {
@@ -195,6 +254,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(registerStorefrontRoutes);
   app.register(registerConsultationRoutes);
   app.register(registerAdvisorRoutes);
+  app.register(registerStatsRoutes);
 
   app.addHook("onReady", async () => {
     await seedDefaultAdvisors(db);

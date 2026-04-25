@@ -387,3 +387,41 @@ xiaochengxu/
 - 镜像 tag：`ghcr.io/<owner>/xiaochengxu-{api,jobs}:<sha>` + `:latest`
 
 本轮测试增长：168 → 179（+11；6 monitor + 3 dlq + 2 lifecycle）。代码变更：21 文件改 + 2 新测试。
+
+### 24 轮（2026-04-25）：长尾收口
+
+**A. 数据可见性 + 真实数据可达性（done）**
+- `GET /api/stats`：`activeMonitors / detectionsThisWeek / riskWarnings / confirmedTro`，按 user_id 隔离；首页 `/pages/home` useEffect 拉取 hydrate（旧的 3/12/2/0 硬编码下线）
+- `evidence.originalUrl` 贯穿 `core/risk.ts → tools/connectors → tools/services → query-result-view-model → report-detail-view-model → result-screen + report-unlock-screen`；live USPTO 从 `serialNumber` 合成 tsdr permalink，live CourtListener 从 `absolute_url` 拼出 case URL；fixture/mock 留空（不能造假 URL）
+- evidence-item 渲染时若有 `originalUrl` 显示"查看原始来源 ↗"链接，H5 走 `window.open`，weapp 由 `typeof window` 守卫短路
+
+**B. 校验 + 安全（done）**
+- `POST /api/query-tasks`、`POST /api/reports/:id/unlock` 加 JSON Schema body 校验（query 加 tool 枚举 + input 长度限制；unlock 加 email format + phone pattern）
+- `@fastify/helmet` 注入安全头（API-only 模式：CSP off、其他默认开）
+- `@fastify/swagger + swagger-ui` 自动从 JSON Schema 生成 `/docs` UI
+- BuildAppOptions 新增 `helmet`、`openApi` 开关，方便测试或硬化生产环境关掉文档
+
+**C. 限流分级（done）**
+- `BuildAppOptions.perRouteRateLimits`：`createQueryTask / createMonitor / unlockReport / createConsultation / anonymousAuth` 各自一套 max + window，env 驱动（`RATE_LIMIT_QUERY_MAX/_WINDOW`、`RATE_LIMIT_MONITOR_*` 等）
+- 每条路由 `config: { rateLimit: app.rateLimits.<name> }`，未配置则继承全局
+- `@xiaochengxu/tools` 新增 `rate-limit.ts`：token bucket 限速器 + `wrapConnectorWithLimiter` Proxy；live USPTO/CourtListener/Amazon 自动包一层（fixture 不限流）；env 形如 `PROVIDER_RATE_LIMIT_USPTO_CAPACITY / _REFILL_MS`
+- 5 个 token-bucket 单元测试
+
+**D. UI 收口（done）**
+- 结果页"加入监控"改成两步：先开 picker（5 段频率），确认才真正提交，并把 `tickIntervalSeconds` 一起带过去
+- 新增 `/pages/admin-dlq`：失败通知 DLQ 内部管理页，输入 internal token 后展示失败 jobs 列表，每条可"重新投递"，token 缓存到 storage；3 个组件测试
+
+**E. 运维 + 工程化（done）**
+- `docker-compose.yml`：API 加 healthcheck（node fetch /health）+ 依赖 postgres healthy；新增 `smoke` profile（curlimages/curl 容器跑 anonymous → query-tasks → /api/stats 三步串行，全 0 退出码视作 OK）
+- `vitest.config.ts` 加 `coverage` 块（v8 provider，threshold lines/functions ≥ 60、branches ≥ 55）；package.json 加 `test:coverage` 脚本
+- weapp 平台 build 通过：`pnpm --filter @xiaochengxu/miniprogram build` 全 8 页编译成 wxml/json/js（之前只验证过 H5）
+
+本轮测试增长：179 → 190（+11；3 stats + 5 rate-limit + 3 admin-dlq）。代码变更：30 文件改 + 5 新文件（routes/stats.ts、routes/admin-dlq、tests/api/stats、tests/tools/rate-limit、admin-dlq/index.tsx + .config.ts + .test.tsx）。
+
+**仍未做**（受外部凭证 / 决策阻塞）：
+- WeChat 真 AppID + 体验版（#14）
+- USPTO 真 endpoint URL template + Amazon 付费 API
+- Sentry DSN、SMTP/SMS 真实凭证
+- GHCR 推送（CI 已就绪，等 repo Settings → Actions 给 Workflow Permissions = Read and write）
+- 部署目标（云厂商/k8s/VPS 选型）
+- 商业化定价 / 顾问 SLA / 监控滥用上限 / 文案合规审阅
