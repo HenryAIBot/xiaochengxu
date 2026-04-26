@@ -1,6 +1,7 @@
 import type { NormalizedInput, ToolName } from "@xiaochengxu/core";
 import { TtlCache } from "./cache.js";
 import type { CourtListenerPort } from "./connectors/courtlistener-connector.js";
+import { EnrichedUsptoConnector } from "./connectors/enriched-uspto-connector.js";
 import { FixtureAmazonListingConnector } from "./connectors/fixture-amazon-listing-connector.js";
 import { FixtureCourtListenerConnector } from "./connectors/fixture-courtlistener-connector.js";
 import { FixtureUsptoTrademarkConnector } from "./connectors/fixture-uspto-trademark-connector.js";
@@ -9,6 +10,11 @@ import { LiveCourtListenerConnector } from "./connectors/live-courtlistener-conn
 import { LiveMarkbaseTrademarkConnector } from "./connectors/live-markbase-trademark-connector.js";
 import { LiveRainforestAmazonConnector } from "./connectors/live-rainforest-amazon-connector.js";
 import { LiveUsptoTrademarkConnector } from "./connectors/live-uspto-trademark-connector.js";
+import { LiveUsptoTsdrConnector } from "./connectors/live-uspto-tsdr-connector.js";
+import {
+  DataSourceError,
+  classifyDataSourceError,
+} from "./data-source-errors.js";
 import {
   createTokenBucketLimiter,
   readLimiterConfig,
@@ -19,6 +25,7 @@ import { InfringementCheckService } from "./services/infringement-check-service.
 import { TroAlertService } from "./services/tro-alert-service.js";
 
 export * from "./cache.js";
+export * from "./data-source-errors.js";
 export * from "./env-loader.js";
 export * from "./rate-limit.js";
 export * from "./connectors/amazon-listing-connector.js";
@@ -27,10 +34,12 @@ export * from "./connectors/uspto-trademark-connector.js";
 export * from "./connectors/fixture-amazon-listing-connector.js";
 export * from "./connectors/fixture-courtlistener-connector.js";
 export * from "./connectors/fixture-uspto-trademark-connector.js";
+export * from "./connectors/enriched-uspto-connector.js";
 export * from "./connectors/live-courtlistener-connector.js";
 export * from "./connectors/live-markbase-trademark-connector.js";
 export * from "./connectors/live-rainforest-amazon-connector.js";
 export * from "./connectors/live-uspto-trademark-connector.js";
+export * from "./connectors/live-uspto-tsdr-connector.js";
 export * from "./connectors/mock-amazon-listing-connector.js";
 export * from "./connectors/mock-courtlistener-connector.js";
 export * from "./connectors/mock-uspto-trademark-connector.js";
@@ -302,6 +311,14 @@ export function resolveAmazonConnector(override?: {
   };
 }
 
+function maybeEnrichWithTsdr<T extends UsptoPort>(connector: T): UsptoPort {
+  if (process.env.USPTO_TSDR_ENRICH !== "1") return connector;
+  const tsdr = new LiveUsptoTsdrConnector({
+    baseUrl: process.env.USPTO_TSDR_BASE_URL,
+  });
+  return new EnrichedUsptoConnector(connector, tsdr);
+}
+
 export function resolveUsptoConnector(override?: {
   connector: UsptoPort;
   source: DataSource;
@@ -314,10 +331,12 @@ export function resolveUsptoConnector(override?: {
       authHeader: process.env.USPTO_AUTH_HEADER,
     });
     return {
-      connector: applyProviderLimiter("uspto", DATA_SOURCE_LIVE, connector, {
-        capacity: 10,
-        refillIntervalMs: 1000,
-      }),
+      connector: maybeEnrichWithTsdr(
+        applyProviderLimiter("uspto", DATA_SOURCE_LIVE, connector, {
+          capacity: 10,
+          refillIntervalMs: 1000,
+        }),
+      ),
       source: DATA_SOURCE_LIVE,
     };
   }
@@ -332,10 +351,12 @@ export function resolveUsptoConnector(override?: {
       statusCodes,
     });
     return {
-      connector: applyProviderLimiter("uspto", DATA_SOURCE_LIVE, connector, {
-        capacity: 10,
-        refillIntervalMs: 1000,
-      }),
+      connector: maybeEnrichWithTsdr(
+        applyProviderLimiter("uspto", DATA_SOURCE_LIVE, connector, {
+          capacity: 10,
+          refillIntervalMs: 1000,
+        }),
+      ),
       source: DATA_SOURCE_LIVE,
     };
   }
@@ -429,6 +450,15 @@ export function createDefaultToolExecutor(config?: ToolExecutorConfig) {
     return `${input.tool}:${input.normalizedInput.kind}:${input.normalizedInput.normalizedValue}`;
   }
 
+  async function withFriendlyErrors<T>(work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (err) {
+      if (err instanceof DataSourceError) throw err;
+      throw new DataSourceError(classifyDataSourceError(err));
+    }
+  }
+
   return async function runQueryTool(
     input: RunQueryToolInput,
   ): Promise<ToolResult> {
@@ -442,7 +472,9 @@ export function createDefaultToolExecutor(config?: ToolExecutorConfig) {
     switch (tool) {
       case "tro_alert": {
         if (courtListenerSource === DATA_SOURCE_FIXTURE) warnFixtureOnce();
-        const r = await troAlert.run(normalizedInput.normalizedValue);
+        const r = await withFriendlyErrors(() =>
+          troAlert.run(normalizedInput.normalizedValue),
+        );
         result = {
           level: r.preview.level,
           summary: r.preview.summary,
@@ -459,9 +491,11 @@ export function createDefaultToolExecutor(config?: ToolExecutorConfig) {
             ? mergeDataSources(amazonSource, usptoSource)
             : usptoSource;
         if (dataSource !== DATA_SOURCE_LIVE) warnFixtureOnce();
-        const r = await infringement.run(
-          normalizedInput.normalizedValue,
-          normalizedInput.kind,
+        const r = await withFriendlyErrors(() =>
+          infringement.run(
+            normalizedInput.normalizedValue,
+            normalizedInput.kind,
+          ),
         );
         result = {
           level: r.preview.level,
@@ -476,7 +510,9 @@ export function createDefaultToolExecutor(config?: ToolExecutorConfig) {
       }
       case "case_progress": {
         if (courtListenerSource === DATA_SOURCE_FIXTURE) warnFixtureOnce();
-        const r = await caseProgress.run(normalizedInput.normalizedValue);
+        const r = await withFriendlyErrors(() =>
+          caseProgress.run(normalizedInput.normalizedValue),
+        );
         result = {
           level: r.preview.level,
           summary: r.preview.summary,

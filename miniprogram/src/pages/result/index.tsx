@@ -156,6 +156,7 @@ export default function ResultPage() {
         evidence={viewModel.evidence}
         actions={viewModel.actions}
         dataSource={viewModel.dataSource}
+        timeline={viewModel.timeline}
         onUnlockReport={() =>
           Taro.navigateTo({
             url: `/pages/report/index?id=${viewModel.reportId}`,

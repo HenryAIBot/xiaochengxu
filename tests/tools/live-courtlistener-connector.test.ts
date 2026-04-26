@@ -159,4 +159,60 @@ describe("LiveCourtListenerConnector", () => {
       () => new LiveCourtListenerConnector({ token: "" as unknown as string }),
     ).toThrow();
   });
+
+  it("maps recap_documents into absolute viewer URLs on each entry", async () => {
+    const { fetchImpl } = mockFetch([
+      () => ({
+        ok: true,
+        body: {
+          results: [
+            {
+              date_filed: "2026-04-18",
+              description: "Temporary restraining order entered.",
+              recap_documents: [
+                {
+                  description: "TRO Order",
+                  absolute_url: "/recap/gov.uscourts.cand.123/15/0/?download=1",
+                  page_count: 8,
+                  is_available: true,
+                },
+                {
+                  description: "Exhibit A",
+                  filepath_ia: "https://archive.org/download/x/exhibit-a.pdf",
+                  is_available: false,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ]);
+
+    const connector = new LiveCourtListenerConnector({
+      token: "t",
+      baseUrl: "https://example.test",
+      fetchImpl,
+    });
+
+    const result = await connector.getDocket("2:24-cv-03721");
+    expect(result.entries).toEqual([
+      {
+        date: "2026-04-18",
+        description: "Temporary restraining order entered.",
+        documents: [
+          {
+            description: "TRO Order",
+            url: "https://example.test/recap/gov.uscourts.cand.123/15/0/?download=1",
+            pageCount: 8,
+            isAvailable: true,
+          },
+          {
+            description: "Exhibit A",
+            url: "https://archive.org/download/x/exhibit-a.pdf",
+            isAvailable: false,
+          },
+        ],
+      },
+    ]);
+  });
 });

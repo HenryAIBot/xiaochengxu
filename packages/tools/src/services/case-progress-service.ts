@@ -1,9 +1,13 @@
 import { type DetectionSignal, buildPreview } from "@xiaochengxu/core";
-import type { CourtListenerPort } from "../connectors/courtlistener-connector.js";
+import type {
+  CourtListenerPort,
+  CourtListenerRecapDocument,
+} from "../connectors/courtlistener-connector.js";
 
 export interface CaseTimelineItem {
   at: string;
   event: string;
+  documents?: CourtListenerRecapDocument[];
 }
 
 const CASE_EVENT_TRANSLATIONS: Array<[RegExp, string]> = [
@@ -34,12 +38,21 @@ export class CaseProgressService {
     const timeline: CaseTimelineItem[] = docket.entries.map((entry) => ({
       at: entry.date,
       event: translateCaseEvent(entry.description),
+      ...(entry.documents && entry.documents.length > 0
+        ? { documents: entry.documents }
+        : {}),
     }));
-    const evidence: DetectionSignal[] = timeline.map((entry) => ({
-      source: "courtlistener",
-      level: "watch",
-      reason: `${entry.at} 出现新的案件节点：${entry.event}`,
-    }));
+    const evidence: DetectionSignal[] = timeline.map((entry) => {
+      const primaryDoc = entry.documents?.find((d) => d.isAvailable !== false);
+      const docCount = entry.documents?.length ?? 0;
+      const reasonSuffix = docCount > 0 ? `（${docCount} 份附件可查看）` : "";
+      return {
+        source: "courtlistener",
+        level: "watch",
+        reason: `${entry.at} 出现新的案件节点：${entry.event}${reasonSuffix}`,
+        ...(primaryDoc ? { originalUrl: primaryDoc.url } : {}),
+      };
+    });
 
     return {
       preview: buildPreview({

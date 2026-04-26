@@ -1,3 +1,8 @@
+import {
+  type TimelineEntry,
+  extractTimelineFromExtra,
+} from "./query-result-view-model";
+
 export interface ReportDetail {
   id: string;
   unlocked: boolean;
@@ -40,6 +45,7 @@ export interface FullReportViewModel {
   }>;
   actions: string[];
   dataSource?: string;
+  timeline?: TimelineEntry[];
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -82,5 +88,12 @@ export function toFullReportViewModel(
         ? report.preview.recommendedActions
         : ["继续观察"],
     dataSource: report.preview.dataSource,
+    ...(extractTimelineFromExtra(report.preview.extra)
+      ? {
+          timeline: extractTimelineFromExtra(
+            report.preview.extra,
+          ) as TimelineEntry[],
+        }
+      : {}),
   };
 }

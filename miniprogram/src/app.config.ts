@@ -8,6 +8,7 @@ export default defineAppConfig({
     "pages/messages/index",
     "pages/profile/index",
     "pages/admin-dlq/index",
+    "pages/admin-data-sources/index",
   ],
   tabBar: {
     list: [

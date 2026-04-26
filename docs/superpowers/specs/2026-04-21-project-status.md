@@ -1,7 +1,7 @@
 # 项目现状盘点
 
 > 原始盘点日期：2026-04-21
-> 最近更新：2026-04-25（经过 31 轮迭代，详见文末 `最近变更日志`）
+> 最近更新：2026-04-26（经过 33 轮迭代，详见文末 `最近变更日志`）
 
 ## 一句话结论
 
@@ -568,3 +568,61 @@ xiaochengxu/
 - Rainforest 商品详情偶发 `brand` 为空时，旧逻辑会把空字符串传给商标检索，可能命中无关商标。
 - 已改为跳过空 `Brand:`，回退到 product title 第一词；`B0DPHRHRDL` 现在解析为 `nike`，命中 `NIKE / Nike, Inc.`。
 - 新增回归测试覆盖“Brand 字段为空但标题含品牌”的 ASIN 检测路径。
+
+### 32 轮（2026-04-26）：CourtListener RECAP 文档 + USPTO TSDR 交叉校验
+
+**结论**：
+- 测试：219 → **228**（+9；TSDR 5、enrichment 4、case-progress 2，去掉 1 重复 = 实际 +11 个新 case）
+- `pnpm lint` / `pnpm test` / `pnpm build` 全绿
+- 不需要新申请任何 API key —— RECAP 复用现有 `COURTLISTENER_API_TOKEN`，TSDR 是公开免费端点
+
+**A. CourtListener RECAP 文档贯穿（done）**
+- `CourtListenerDocketEntry` 加可选 `documents?: Array<{ url, description?, pageCount?, isAvailable? }>`
+- `LiveCourtListenerConnector.getDocket` 解析 `recap_documents[*].absolute_url`/`filepath_ia`/`page_count`/`is_available`，拼成绝对 viewer URL
+- `CaseProgressService` 把第一份 `isAvailable !== false` 文档 URL 当作 `originalUrl` 挂到证据信号；reason 加“(N 份附件可查看)”后缀
+- 已有的 `evidence-item` 渲染逻辑自动展示“查看原始来源 ↗”链接，无需前端改动
+- `case-progress-service.test.ts` 2 case 覆盖文档贯穿与 sealed-only 不外露
+- 扩展 `live-courtlistener-connector.test.ts` 多 1 case 验证 RECAP 映射
+
+**B. USPTO TSDR 官方 API 交叉校验（done）**
+- 新 `LiveUsptoTsdrConnector`：调 `https://tsdr.uspto.gov/ts/cd/casestatus/sn{serial}/info.xml`（无需 API key 的公开端点），用正则提取 owner/mark/status text/status date 四个字段
+- 状态分类：text 含 "abandoned/cancelled/expired/dead" → DEAD；含 "registered/renewed/published/approved/live" → LIVE；其余 UNKNOWN
+- 序列号格式校验（6-9 位数字）+ 404 → null + 5xx → throw
+- 新 `EnrichedUsptoConnector(base, tsdr)`：装饰器，对 base 返回的每条 mark 提取 URL 中的 serial number → 并行调 TSDR；TSDR 不同意时 TSDR 优先；失败/UNKNOWN 时静默保留 base 结果；最大并行 5
+- `resolveUsptoConnector` 在 `USPTO_TSDR_ENRICH=1` 时自动 wrap Markbase 或自建 proxy connector
+- `.env.example` 补 `USPTO_TSDR_ENRICH=1` / `USPTO_TSDR_BASE_URL`
+- `live-uspto-tsdr-connector.test.ts` 5 case + `enriched-uspto-connector.test.ts` 4 case 覆盖正常路径、404、序列号格式、TSDR 失败兜底、无 URL 跳过
+
+**为什么这两条**：
+- 都不要外部新 key，今天就能落地；不增加运维负担
+- RECAP 直接增强用户最关心的 TRO 报告可信度（"我能不能看到原始诉状/order"）
+- TSDR 是 USPTO 自己的官方系统；当 Markbase 索引滞后或字段被人为编辑时，TSDR 是最权威的二次来源
+
+### 33 轮（2026-04-26）：故障明示 + RECAP 时间线 + 数据源运维页
+
+**结论**：
+- 测试：228 → **242**（+14；errors 7、timeline 4、admin-data-sources 3）
+- `pnpm lint` / `pnpm test` / `pnpm build` 全绿
+- 这一轮专攻"无外部依赖、立刻能交付"的三个面：错误可读 / 数据可见 / 运维可达
+
+**A. 数据源故障友好提示（done）**
+- 新 `packages/tools/src/data-source-errors.ts`：`classifyDataSourceError(err)` 按消息中的关键词把错误分类成 `courtlistener` / `uspto` / `amazon` / `unknown`，并按 HTTP 状态码生成中文 hint：401/403 → "凭证或授权问题"，429 → "供应商限流"，5xx → "供应商服务暂时不可用"，timeout/ECONNRESET → "网络超时"
+- `DataSourceError` extends Error；executor 用 `withFriendlyErrors()` 包装每个 tool 路径，把所有连接器抛出的英文堆栈转成 `"USPTO 商标检索暂不可用：供应商限流，请稍后重试"` 这种中文，落到 `query_tasks.failure_reason`，前端 failed-state 直接显示
+- 已是 DataSourceError 的不双包；7 个新单元测试覆盖三家供应商 + 状态码细分 + 网络超时 + 不重复包装
+
+**B. RECAP 文档时间线 UI（done）**
+- 新 `miniprogram/src/components/timeline-section.tsx` —— 案件 docket 时间线卡片，每个节点下展开附件列表；`isAvailable === false` 显示"已封存，需走 PACER"；其余可点开 CourtListener viewer
+- `query-result-view-model` 新增 `TimelineEntry` / `TimelineDocument` 类型 + `extractTimelineFromExtra(extra)` 从 `result.extra.timeline` 安全解析（防御非数组、缺字段）
+- `flattenCompletedTask` 把 timeline 一并贯穿到 `QueryTaskResult`；`toResultViewModel` 暴露在 `ResultViewModel.timeline`
+- `report-detail-view-model` 同步贯穿到 `FullReportViewModel.timeline`
+- `ResultScreen` 和 `ReportUnlockScreen` 在 timeline 非空时插入 TimelineSection
+- 4 个新测试：3 个 view-model 解析 case（含 malformed） + 1 个 result-screen 渲染（含 sealed 文档）
+
+**C. 数据源运维页（done）**
+- 新 `/pages/admin-data-sources/`：与 `/pages/admin-dlq/` 同模式（token 输入 + storage 缓存 + 拉取 internal 端点 + ready/loading/failed 三态）
+- 调用 `GET /api/internal/data-sources/status`，渲染 provider × capability 表格：徽章（live/mixed/fixture）+ 缺失 env 提示 + 必填/可选 env 列表
+- 新 `app.config.ts` pages 注册；3 个组件测试覆盖 ready / failed / 无 token 三态
+
+**外部依赖**：
+- 全部"无外部依赖即可交付"的三项；不需要新 API key 或新供应商账号
+- 仍未做：付费数据源（Keepa / Amazon SP-API）、商业化定价、生产部署目标

@@ -5,9 +5,19 @@ export interface CourtListenerSearchResult {
   url?: string;
 }
 
+export interface CourtListenerRecapDocument {
+  description?: string;
+  /** CourtListener viewer URL (free RECAP archive). */
+  url: string;
+  pageCount?: number;
+  isAvailable?: boolean;
+}
+
 export interface CourtListenerDocketEntry {
   date: string;
   description: string;
+  /** Free RECAP archive documents attached to this entry, when present. */
+  documents?: CourtListenerRecapDocument[];
 }
 
 export interface CourtListenerPort {

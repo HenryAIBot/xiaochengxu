@@ -1,5 +1,18 @@
 export type QueryTool = "infringement_check" | "tro_alert" | "case_progress";
 
+export interface TimelineDocument {
+  url: string;
+  description?: string;
+  pageCount?: number;
+  isAvailable?: boolean;
+}
+
+export interface TimelineEntry {
+  at: string;
+  event: string;
+  documents?: TimelineDocument[];
+}
+
 export interface QueryTaskResult {
   id: string;
   reportId: string;
@@ -20,6 +33,7 @@ export interface QueryTaskResult {
   recommendedActions: string[];
   dataSource?: string;
   sourceFetchedAt?: string | null;
+  timeline?: TimelineEntry[];
 }
 
 export interface ResultViewModel {
@@ -43,6 +57,7 @@ export interface ResultViewModel {
   }>;
   actions: string[];
   dataSource?: string;
+  timeline?: TimelineEntry[];
 }
 
 export interface CompletedTaskStatus {
@@ -64,7 +79,47 @@ export interface CompletedTaskStatus {
     recommendedActions: string[];
     dataSource?: string;
     sourceFetchedAt?: string | null;
+    extra?: unknown;
   };
+}
+
+export function extractTimelineFromExtra(
+  extra: unknown,
+): TimelineEntry[] | undefined {
+  if (!extra || typeof extra !== "object") return undefined;
+  const candidate = (extra as { timeline?: unknown }).timeline;
+  if (!Array.isArray(candidate)) return undefined;
+  const entries: TimelineEntry[] = [];
+  for (const raw of candidate) {
+    if (!raw || typeof raw !== "object") continue;
+    const at = (raw as { at?: unknown }).at;
+    const event = (raw as { event?: unknown }).event;
+    if (typeof at !== "string" || typeof event !== "string") continue;
+    const docsRaw = (raw as { documents?: unknown }).documents;
+    const documents: TimelineDocument[] = [];
+    if (Array.isArray(docsRaw)) {
+      for (const doc of docsRaw) {
+        if (!doc || typeof doc !== "object") continue;
+        const url = (doc as { url?: unknown }).url;
+        if (typeof url !== "string" || url.length === 0) continue;
+        const description = (doc as { description?: unknown }).description;
+        const pageCount = (doc as { pageCount?: unknown }).pageCount;
+        const isAvailable = (doc as { isAvailable?: unknown }).isAvailable;
+        documents.push({
+          url,
+          ...(typeof description === "string" ? { description } : {}),
+          ...(typeof pageCount === "number" ? { pageCount } : {}),
+          ...(typeof isAvailable === "boolean" ? { isAvailable } : {}),
+        });
+      }
+    }
+    entries.push({
+      at,
+      event,
+      ...(documents.length > 0 ? { documents } : {}),
+    });
+  }
+  return entries.length > 0 ? entries : undefined;
 }
 
 export function flattenCompletedTask(
@@ -86,6 +141,7 @@ export function flattenCompletedTask(
     recommendedActions: status.result.recommendedActions,
     dataSource: status.result.dataSource,
     sourceFetchedAt: status.result.sourceFetchedAt,
+    timeline: extractTimelineFromExtra(status.result.extra),
   };
 }
 
@@ -161,5 +217,6 @@ export function toResultViewModel(result: QueryTaskResult): ResultViewModel {
         ? result.recommendedActions
         : ["继续观察"],
     dataSource: result.dataSource,
+    ...(result.timeline ? { timeline: result.timeline } : {}),
   };
 }

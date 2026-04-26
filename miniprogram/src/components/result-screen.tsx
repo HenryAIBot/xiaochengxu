@@ -1,5 +1,7 @@
 import { Button, Text, View } from "@tarojs/components";
 import { useState } from "react";
+import type { TimelineEntry } from "../lib/query-result-view-model";
+import { TimelineSection } from "./timeline-section";
 
 const MONITOR_INTERVAL_PRESETS: Array<{
   seconds: number;
@@ -42,6 +44,7 @@ export function ResultScreen({
   evidence,
   actions,
   dataSource,
+  timeline,
   onUnlockReport,
   onStartMonitor,
   onContactAdvisor,
@@ -61,6 +64,7 @@ export function ResultScreen({
   }>;
   actions: string[];
   dataSource?: string;
+  timeline?: TimelineEntry[];
   onUnlockReport(): void;
   onStartMonitor(input: {
     tickIntervalSeconds: number;
@@ -130,6 +134,10 @@ export function ResultScreen({
           <Text className="card__text">暂未发现可展示的关键证据</Text>
         )}
       </View>
+
+      {timeline && timeline.length > 0 ? (
+        <TimelineSection timeline={timeline} />
+      ) : null}
 
       <View className="card">
         <Text className="card__title">建议动作</Text>

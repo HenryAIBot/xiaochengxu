@@ -26,12 +26,24 @@ interface SearchResultRaw {
   absoluteUrl?: string;
 }
 
+interface RecapDocumentRaw {
+  description?: string;
+  absolute_url?: string;
+  absoluteUrl?: string;
+  filepath_ia?: string;
+  filepathIa?: string;
+  page_count?: number;
+  pageCount?: number;
+  is_available?: boolean;
+  isAvailable?: boolean;
+}
+
 interface DocketEntryRaw {
   date_filed?: string;
   dateFiled?: string;
   description?: string;
   entry_number?: number;
-  recap_documents?: Array<{ description?: string }>;
+  recap_documents?: RecapDocumentRaw[];
 }
 
 interface Paginated<T> {
@@ -107,15 +119,42 @@ export class LiveCourtListenerConnector implements CourtListenerPort {
 
     const entries: CourtListenerDocketEntry[] = (payload.results ?? [])
       .slice(0, this.maxResults)
-      .map((raw) => ({
-        date: pickString(raw.date_filed, raw.dateFiled),
-        description: pickString(
-          raw.description,
-          raw.recap_documents?.[0]?.description,
-        ),
-      }))
+      .map((raw) => {
+        const documents = this.mapRecapDocuments(raw.recap_documents);
+        return {
+          date: pickString(raw.date_filed, raw.dateFiled),
+          description: pickString(
+            raw.description,
+            raw.recap_documents?.[0]?.description,
+          ),
+          ...(documents.length > 0 ? { documents } : {}),
+        };
+      })
       .filter((e) => e.date.length > 0 && e.description.length > 0);
 
     return { entries };
+  }
+
+  private mapRecapDocuments(
+    raw: RecapDocumentRaw[] | undefined,
+  ): NonNullable<CourtListenerDocketEntry["documents"]> {
+    if (!raw || raw.length === 0) return [];
+    return raw
+      .map((doc) => {
+        const relative = pickString(doc.absolute_url, doc.absoluteUrl);
+        const ia = pickString(doc.filepath_ia, doc.filepathIa);
+        const url = relative ? `${this.baseUrl}${relative}` : ia;
+        if (!url) return undefined;
+        const description = pickString(doc.description);
+        const pageCount = doc.page_count ?? doc.pageCount;
+        const isAvailable = doc.is_available ?? doc.isAvailable;
+        return {
+          url,
+          ...(description ? { description } : {}),
+          ...(typeof pageCount === "number" ? { pageCount } : {}),
+          ...(typeof isAvailable === "boolean" ? { isAvailable } : {}),
+        };
+      })
+      .filter((d): d is NonNullable<typeof d> => d !== undefined);
   }
 }

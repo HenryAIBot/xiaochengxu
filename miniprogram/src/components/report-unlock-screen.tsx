@@ -5,6 +5,7 @@ import {
   type ReportDetail,
   toFullReportViewModel,
 } from "../lib/report-detail-view-model";
+import { TimelineSection } from "./timeline-section";
 
 const LEVEL_BADGE: Record<string, string> = {
   未发现明显风险: "badge badge--clear",
@@ -202,6 +203,10 @@ function FullReportContent({
           <Text className="card__text">暂未发现可展示的关键证据</Text>
         )}
       </View>
+
+      {report.timeline && report.timeline.length > 0 ? (
+        <TimelineSection timeline={report.timeline} />
+      ) : null}
 
       <View className="section">
         <Text className="section__title">处理清单</Text>

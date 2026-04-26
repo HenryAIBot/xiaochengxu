@@ -121,4 +121,49 @@ describe("ResultScreen", () => {
 
     expect(screen.getByText("真实数据（外部 API）")).toBeTruthy();
   });
+
+  it("renders timeline section with available + sealed RECAP documents", () => {
+    render(
+      <ResultScreen
+        toolName="案件进展"
+        level="需关注"
+        summary="案件进展更新。"
+        updatedAt="2026-04-26 10:00"
+        evidence={evidence}
+        actions={["继续观察"]}
+        timeline={[
+          {
+            at: "2026-04-18",
+            event: "法院已签发临时限制令",
+            documents: [
+              {
+                description: "TRO Order",
+                url: "https://courtlistener.test/recap/.../tro",
+                pageCount: 8,
+                isAvailable: true,
+              },
+              {
+                description: "Sealed Exhibit",
+                url: "https://courtlistener.test/recap/.../sealed",
+                isAvailable: false,
+              },
+            ],
+          },
+          { at: "2026-04-12", event: "原告已提交起诉状" },
+        ]}
+        onUnlockReport={vi.fn()}
+        onStartMonitor={vi.fn()}
+        onContactAdvisor={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("案件进展时间线")).toBeTruthy();
+    expect(screen.getByText("2026-04-18")).toBeTruthy();
+    expect(screen.getByText("法院已签发临时限制令")).toBeTruthy();
+    expect(screen.getByText("TRO Order（8 页） ↗")).toBeTruthy();
+    expect(
+      screen.getByText("Sealed Exhibit（已封存，需走 PACER）"),
+    ).toBeTruthy();
+    expect(screen.getByText("原告已提交起诉状")).toBeTruthy();
+  });
 });
